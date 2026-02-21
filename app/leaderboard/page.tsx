@@ -1,21 +1,25 @@
+'use client';
+
 import { leaderboard, teams } from '@/lib/data';
+import { useLanguage } from '@/lib/language';
 
 export default function LeaderboardPage() {
+  const { t } = useLanguage();
   const rows = [...leaderboard].sort((a, b) => b.reputationTotal - a.reputationTotal);
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-bold">Weekly Leaderboard</h1>
-      <p className="text-slate-300">Lifetime points persist while weekly ranks reset via scheduled job.</p>
+      <h1 className="text-2xl font-bold">{t('weeklyLeaderboard')}</h1>
+      <p className="text-slate-300">{t('weeklyLeaderboardDesc')}</p>
       <div className="card overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="text-slate-400">
             <tr>
-              <th className="pb-2">Rank</th>
-              <th className="pb-2">User</th>
-              <th className="pb-2">Club</th>
-              <th className="pb-2">Reputation</th>
-              <th className="pb-2">Title</th>
+              <th className="pb-2">{t('rank')}</th>
+              <th className="pb-2">{t('user')}</th>
+              <th className="pb-2">{t('club')}</th>
+              <th className="pb-2">{t('reputation')}</th>
+              <th className="pb-2">{t('title')}</th>
             </tr>
           </thead>
           <tbody>
