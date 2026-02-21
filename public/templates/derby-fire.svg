@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1e293b" offset="0"/>
+      <stop stop-color="#7f1d1d" offset="1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#g)"/>
+  <text x="60" y="330" fill="#fff" font-family="Arial" font-size="72" font-weight="700">FanWar MM Meme Template</text>
+  <text x="60" y="410" fill="#fca5a5" font-family="Arial" font-size="36">Replace with rivalry banter text</text>
+  <text x="920" y="590" fill="#fff" font-family="Arial" font-size="30">FanWar MM</text>
+</svg>
