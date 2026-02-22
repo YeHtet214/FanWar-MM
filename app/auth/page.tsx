@@ -6,6 +6,7 @@ import { AuthChangeEvent } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const allowedNextPrefixes = ['/', '/onboarding', '/war-room', '/match/', '/meme', '/leaderboard', '/moderation', '/admin/team-override'];
+const defaultCooldownSeconds = 60;
 
 function getSafeNextPath() {
   const nextPath = new URLSearchParams(window.location.search).get('next');
@@ -44,6 +45,27 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!cooldownEndsAt) {
+      setRemainingSeconds(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const secondsLeft = Math.max(0, Math.ceil((cooldownEndsAt - Date.now()) / 1000));
+      setRemainingSeconds(secondsLeft);
+      if (secondsLeft === 0) {
+        setCooldownEndsAt(null);
+      }
+    };
+
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownEndsAt]);
 
   useEffect(() => {
     const client = supabase;
@@ -85,6 +107,11 @@ export default function AuthPage() {
       return;
     }
 
+    if (remainingSeconds > 0) {
+      setErrorMessage(`Please wait ${remainingSeconds}s before requesting another magic link.`);
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
     setStatusMessage(null);
@@ -100,10 +127,20 @@ export default function AuthPage() {
       });
 
       if (error) {
+        const isRateLimit = /rate limit|security purposes|too many requests/i.test(error.message);
+        if (isRateLimit) {
+          const retryMatch = error.message.match(/(\d+)/);
+          const cooldownSeconds = retryMatch ? Number(retryMatch[1]) : defaultCooldownSeconds;
+          setCooldownEndsAt(Date.now() + (cooldownSeconds * 1000));
+          setErrorMessage(`Too many requests. Please wait ${cooldownSeconds}s and try again.`);
+          return;
+        }
+
         setErrorMessage(error.message);
         return;
       }
 
+      setCooldownEndsAt(Date.now() + (defaultCooldownSeconds * 1000));
       setStatusMessage('Check your email for the sign-in link.');
     } finally {
       setLoading(false);
@@ -133,10 +170,10 @@ export default function AuthPage() {
 
         <button
           className="rounded-md bg-red-600 px-4 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={loading}
+          disabled={loading || remainingSeconds > 0}
           type="submit"
         >
-          {loading ? 'Sending link...' : 'Send magic link'}
+          {loading ? 'Sending link...' : remainingSeconds > 0 ? `Retry in ${remainingSeconds}s` : 'Send magic link'}
         </button>
       </form>
 
