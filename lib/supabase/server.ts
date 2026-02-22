@@ -38,6 +38,12 @@ export async function createSupabaseServerClient() {
  * Use this only in trusted server/admin contexts (e.g., server actions, API routes, background jobs),
  * never in client bundles. For client/limited operations, use anon keys with RLS or scoped service tokens.
  */
+let serverSupabaseClient: SupabaseClient | null = null;
+
+/**
+ * Server-side Supabase factory for trusted backend usage.
+ * Keep this available for server components/API routes that require privileged access.
+ */
 export function createServerSupabaseClient() {
   if (!supabaseUrl || !supabaseServiceKey) {
     return null;
