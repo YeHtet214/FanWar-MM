@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AuthChangeEvent } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const allowedNextPrefixes = ['/', '/onboarding', '/war-room', '/match/', '/meme', '/leaderboard', '/moderation', '/admin/team-override'];
@@ -16,6 +17,25 @@ function getSafeNextPath() {
   return isAllowed ? nextPath : '/onboarding';
 }
 
+async function getPostLoginPath(supabase: NonNullable<ReturnType<typeof createSupabaseBrowserClient>>, requestedPath: string) {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) {
+    return '/auth';
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('primary_team_id')
+    .eq('id', userData.user.id)
+    .single();
+
+  if (!profile?.primary_team_id) {
+    return '/onboarding';
+  }
+
+  return requestedPath;
+}
+
 export default function AuthPage() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -26,18 +46,36 @@ export default function AuthPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkSession = async () => {
-      if (!supabase) {
-        return;
-      }
+    const client = supabase;
+    if (!client) {
+      return;
+    }
 
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        router.replace(getSafeNextPath());
+    const checkSession = async () => {
+      const requestedPath = getSafeNextPath();
+      const path = await getPostLoginPath(client, requestedPath);
+      if (path !== '/auth') {
+        router.replace(path);
       }
     };
 
+    const {
+      data: { subscription }
+    } = client.auth.onAuthStateChange(async (event: AuthChangeEvent) => {
+      if (event === 'SIGNED_IN') {
+        const requestedPath = getSafeNextPath();
+        const path = await getPostLoginPath(client, requestedPath);
+        if (path !== '/auth') {
+          router.replace(path);
+        }
+      }
+    });
+
     checkSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   const handleSendMagicLink = async (event: FormEvent<HTMLFormElement>) => {
@@ -52,7 +90,8 @@ export default function AuthPage() {
     setStatusMessage(null);
 
     try {
-      const redirectTo = `${window.location.origin}/onboarding`;
+      const requestedPath = getSafeNextPath();
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(requestedPath)}`;
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
