@@ -32,9 +32,23 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const code = new URLSearchParams(window.location.search).get('code');
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get('code');
+      const tokenHash = searchParams.get('token_hash');
+      const otpType = searchParams.get('type');
+
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setErrorMessage(error.message);
+          return;
+        }
+      } else if (tokenHash && otpType) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: otpType === 'recovery' ? 'recovery' : 'email'
+        });
+
         if (error) {
           setErrorMessage(error.message);
           return;
