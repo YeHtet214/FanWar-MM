@@ -73,9 +73,10 @@ export async function middleware(request: NextRequest) {
   const isAdminOverride = pathname === '/admin/team-override';
 
   if (!user) {
-    if (isProtectedPath(pathname) || isAdminOverride) {
-      const redirectUrl = new URL('/onboarding', request.url);
-      redirectUrl.searchParams.set('next', pathname);
+    if (isProtectedPath(pathname) || isAdminOverride || isOnboarding) {
+      const redirectUrl = new URL('/auth', request.url);
+      const targetPath = `${pathname}${request.nextUrl.search}`;
+      redirectUrl.searchParams.set('next', targetPath);
       return NextResponse.redirect(redirectUrl);
     }
     return response;

@@ -38,6 +38,7 @@ export default function OnboardingPage() {
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
   const [canOverrideSelection, setCanOverrideSelection] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -49,10 +50,13 @@ export default function OnboardingPage() {
 
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
-        setErrorMessage('Please sign in before onboarding.');
+        setIsAuthenticated(false);
+        router.replace(`/auth?next=${encodeURIComponent('/onboarding')}`);
         setProfileLoading(false);
         return;
       }
+
+      setIsAuthenticated(true);
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -73,11 +77,16 @@ export default function OnboardingPage() {
     };
 
     loadProfile();
-  }, [supabase]);
+  }, [router, supabase]);
 
   const selectTeam = async (teamId: string) => {
     if (!supabase) {
       setErrorMessage('Supabase is not configured.');
+      return;
+    }
+
+    if (isAuthenticated === false) {
+      router.replace(`/auth?next=${encodeURIComponent('/onboarding')}`);
       return;
     }
 
@@ -91,7 +100,7 @@ export default function OnboardingPage() {
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
-        setErrorMessage('Session expired. Please sign in again.');
+        router.replace(`/auth?next=${encodeURIComponent('/onboarding')}`);
         return;
       }
 
@@ -141,6 +150,7 @@ export default function OnboardingPage() {
             profileLoading ||
             teamsLoading ||
             Boolean(savingTeamId) ||
+            isAuthenticated === false ||
             (Boolean(currentTeamId) && !canOverrideSelection);
 
           return (

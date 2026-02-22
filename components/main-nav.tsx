@@ -7,6 +7,7 @@ export function MainNav() {
   const { language, setLanguage, t } = useLanguage();
 
   const links = [
+    [t('navSignIn'), '/auth'],
     [t('navOnboarding'), '/onboarding'],
     [t('navWarRoom'), '/war-room'],
     [t('navMatchThread'), '/match/m1'],
