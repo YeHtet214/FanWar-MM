@@ -18,7 +18,8 @@ export default function HomePage() {
         <li>{t('homeStep5')}</li>
       </ol>
       <div className="flex flex-wrap gap-3 pt-2">
-        <Link className="rounded-md bg-red-600 px-4 py-2 font-semibold" href="/onboarding">{t('startOnboarding')}</Link>
+        <Link className="rounded-md bg-red-600 px-4 py-2 font-semibold" href="/auth">{t('signInCreateAccount')}</Link>
+        <Link className="rounded-md border border-slate-600 px-4 py-2" href="/onboarding">{t('startOnboarding')}</Link>
         <Link className="rounded-md border border-slate-600 px-4 py-2" href="/war-room">{t('openWarRoom')}</Link>
       </div>
     </section>
