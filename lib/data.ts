@@ -1,3 +1,4 @@
+// Seed/dev fallback data used when Supabase env vars are not configured.
 import { Match, MemeTemplate, Post, Team, UserProfile } from '@/lib/types';
 
 export const teams: Team[] = [
