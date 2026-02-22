@@ -43,25 +43,28 @@ Yes — this app expects a real Supabase project and environment keys.
 2. In Supabase SQL Editor, run the schema at `supabase/migrations/0001_mvp_schema.sql`.
 3. In **Project Settings → API**, copy:
    - `Project URL`
-   - `anon` public key
-   - `service_role` secret key
-4. Create a local env file:
+   - `publishable` key (modern replacement for legacy `anon`)
+   - `secret` key (preferred server key)
+4. (Optional fallback) if your project still uses legacy keys, you can use `anon` and `service_role`.
+5. Create a local env file:
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-5. Set these values in `.env.local`:
+6. Set these values in `.env.local`:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-publishable-key>
+SUPABASE_SECRET_KEY=<your-secret-key>
+# Legacy fallback (optional):
+# SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 ```
 
-> Keep `SUPABASE_SERVICE_ROLE_KEY` server-only. Never expose it to browser code.
+> Keep `SUPABASE_SECRET_KEY` / `SUPABASE_SERVICE_ROLE_KEY` server-only. Never expose them to browser code.
 
-6. Restart dev server after changing env vars:
+7. Restart dev server after changing env vars:
 
 ```bash
 npm run dev
