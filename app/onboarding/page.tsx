@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { teams } from '@/lib/data';
 import { StepPanel } from '@/components/step-panel';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useLanguage } from '@/lib/language';
+import { getTeams } from '@/lib/repositories/teams';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { Team } from '@/lib/types';
 
 type ProfileRow = {
   primary_team_id: string | null;
@@ -28,8 +30,10 @@ export default function OnboardingPage() {
   const { t } = useLanguage();
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const { data, loading: teamsLoading, error: teamsError } = useAsyncData<Team[]>(getTeams, []);
+  const teams = data ?? [];
 
-  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [savingTeamId, setSavingTeamId] = useState<string | null>(null);
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
   const [canOverrideSelection, setCanOverrideSelection] = useState(false);
@@ -39,14 +43,14 @@ export default function OnboardingPage() {
     const loadProfile = async () => {
       if (!supabase) {
         setErrorMessage('Supabase is not configured.');
-        setLoading(false);
+        setProfileLoading(false);
         return;
       }
 
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
         setErrorMessage('Please sign in before onboarding.');
-        setLoading(false);
+        setProfileLoading(false);
         return;
       }
 
@@ -65,7 +69,7 @@ export default function OnboardingPage() {
         setCanOverrideSelection(Boolean(overrideRequested && profileRow.is_admin));
       }
 
-      setLoading(false);
+      setProfileLoading(false);
     };
 
     loadProfile();
@@ -126,10 +130,18 @@ export default function OnboardingPage() {
         <div className="card border border-red-600 bg-red-950/30 text-red-200">{errorMessage}</div>
       ) : null}
 
+      {teamsLoading && <p className="card text-slate-300">Loading teams...</p>}
+      {teamsError && <p className="card text-red-300">Failed to load teams.</p>}
+      {!teamsLoading && !teamsError && teams.length === 0 && <p className="card text-slate-300">No teams available.</p>}
+
       <div className="grid gap-3 sm:grid-cols-2">
         {teams.map((team) => {
           const isSelected = currentTeamId === team.id;
-          const disabled = loading || Boolean(savingTeamId) || (Boolean(currentTeamId) && !canOverrideSelection);
+          const disabled =
+            profileLoading ||
+            teamsLoading ||
+            Boolean(savingTeamId) ||
+            (Boolean(currentTeamId) && !canOverrideSelection);
 
           return (
             <article key={team.id} className="card flex items-center justify-between">

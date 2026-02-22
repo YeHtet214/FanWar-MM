@@ -1,10 +1,23 @@
-import { createBrowserClient } from '@supabase/ssr';
-import { hasSupabaseEnv, supabaseAnonKey, supabaseUrl } from '@/lib/supabase/env';
+import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
-export function createSupabaseBrowserClient() {
-  if (!hasSupabaseEnv()) {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+let browserSupabaseClient: SupabaseClient | null = null;
+
+export function createBrowserSupabaseClient() {
+  if (!supabaseUrl || !supabaseAnonKey) {
     return null;
   }
 
-  return createBrowserClient(supabaseUrl!, supabaseAnonKey!);
+  if (browserSupabaseClient) {
+    return browserSupabaseClient;
+  }
+
+  browserSupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  return browserSupabaseClient;
+}
+
+export function createSupabaseBrowserClient() {
+  return createBrowserSupabaseClient();
 }
