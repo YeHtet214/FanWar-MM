@@ -20,38 +20,46 @@ export default function TeamOverridePage() {
     setSaving(true);
     setStatus(null);
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
-      setStatus('You must be signed in as an admin.');
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        setStatus('You must be signed in as an admin.');
+        return;
+      }
+
+      const { data: adminProfile, error: adminError } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (adminError || !adminProfile?.is_admin) {
+        setStatus('Admin access is required for overrides.');
+        return;
+      }
+
+      const { data: updatedRows, error: updateError } = await supabase
+        .from('profiles')
+        .update({ primary_team_id: teamId })
+        .eq('id', targetUserId.trim())
+        .select('id');
+
+      if (updateError) {
+        setStatus(updateError.message);
+        return;
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        setStatus('No user found or no rows updated for that user id.');
+        return;
+      }
+
+      setStatus('Team override applied successfully.');
+    } catch {
+      setStatus('Unexpected error while applying override. Please try again.');
+    } finally {
       setSaving(false);
-      return;
     }
-
-    const { data: adminProfile, error: adminError } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', userData.user.id)
-      .single();
-
-    if (adminError || !adminProfile?.is_admin) {
-      setStatus('Admin access is required for overrides.');
-      setSaving(false);
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ primary_team_id: teamId })
-      .eq('id', targetUserId.trim());
-
-    if (updateError) {
-      setStatus(updateError.message);
-      setSaving(false);
-      return;
-    }
-
-    setStatus('Team override applied successfully.');
-    setSaving(false);
   };
 
   return (

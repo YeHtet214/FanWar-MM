@@ -2,10 +2,43 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { hasSupabaseEnv, supabaseAnonKey, supabaseUrl } from '@/lib/supabase/env';
 
+type SetAllCookies = {
+  name: string;
+  value: string;
+  options?: Parameters<NextResponse['cookies']['set']>[2];
+};
+
 const protectedPrefixes = ['/war-room', '/match', '/meme', '/leaderboard', '/moderation'];
+const profileCacheCookie = 'fw_profile_cache';
+
+type ProfileCache = {
+  primary_team_id: string | null;
+  is_admin: boolean;
+  exp: number;
+};
 
 function isProtectedPath(pathname: string) {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function readProfileCache(rawValue?: string): ProfileCache | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as ProfileCache;
+    if (!parsed || typeof parsed.exp !== 'number' || parsed.exp < Date.now()) {
+      return null;
+    }
+    return {
+      primary_team_id: parsed.primary_team_id ?? null,
+      is_admin: Boolean(parsed.is_admin),
+      exp: parsed.exp
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function middleware(request: NextRequest) {
@@ -24,7 +57,7 @@ export async function middleware(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: SetAllCookies[]) {
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
         });
@@ -35,6 +68,7 @@ export async function middleware(request: NextRequest) {
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   const pathname = request.nextUrl.pathname;
+  const adminOverrideRequested = request.nextUrl.searchParams.get('adminOverride') === '1';
   const isOnboarding = pathname === '/onboarding';
   const isAdminOverride = pathname === '/admin/team-override';
 
@@ -47,16 +81,46 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('primary_team_id, is_admin')
-    .eq('id', user.id)
-    .single();
+  const metadataTeam = typeof user.user_metadata?.primary_team_id === 'string'
+    ? user.user_metadata.primary_team_id
+    : null;
+  const metadataIsAdmin = typeof user.user_metadata?.is_admin === 'boolean'
+    ? user.user_metadata.is_admin
+    : null;
+  const cachedProfile = readProfileCache(request.cookies.get(profileCacheCookie)?.value);
 
-  const hasTeam = Boolean(profile?.primary_team_id);
-  const isAdmin = Boolean(profile?.is_admin);
+  let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? null;
+  let isAdmin = metadataIsAdmin ?? cachedProfile?.is_admin ?? null;
 
-  if (isAdminOverride && !isAdmin) {
+  if (primaryTeamId === null || isAdmin === null) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('primary_team_id, is_admin')
+      .eq('id', user.id)
+      .single();
+
+    primaryTeamId = profile?.primary_team_id ?? null;
+    isAdmin = Boolean(profile?.is_admin);
+
+    response.cookies.set(profileCacheCookie, JSON.stringify({
+      primary_team_id: primaryTeamId,
+      is_admin: isAdmin,
+      exp: Date.now() + (5 * 60 * 1000)
+    }), {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+      path: '/'
+    });
+  }
+
+  const hasTeam = Boolean(primaryTeamId);
+  const hasAdminAccess = Boolean(isAdmin);
+
+  if (isAdminOverride && !hasAdminAccess) {
+    if (!hasTeam) {
+      return NextResponse.redirect(new URL('/onboarding', request.url));
+    }
     return NextResponse.redirect(new URL('/war-room', request.url));
   }
 
@@ -64,7 +128,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/onboarding', request.url));
   }
 
-  if (isOnboarding && hasTeam) {
+  if (isOnboarding && hasTeam && !(hasAdminAccess && adminOverrideRequested)) {
     return NextResponse.redirect(new URL('/war-room', request.url));
   }
 

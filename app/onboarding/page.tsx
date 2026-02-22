@@ -12,6 +12,18 @@ type ProfileRow = {
   is_admin: boolean | null;
 };
 
+const allowedNextPrefixes = ['/war-room', '/match/', '/meme', '/leaderboard', '/moderation'];
+
+function getSafeNextPath() {
+  const nextPath = new URLSearchParams(window.location.search).get('next');
+  if (!nextPath || !nextPath.startsWith('/')) {
+    return '/war-room';
+  }
+
+  const isAllowed = allowedNextPrefixes.some((prefix) => nextPath === prefix || nextPath.startsWith(prefix));
+  return isAllowed ? nextPath : '/war-room';
+}
+
 export default function OnboardingPage() {
   const { t } = useLanguage();
   const router = useRouter();
@@ -72,28 +84,30 @@ export default function OnboardingPage() {
     setSavingTeamId(teamId);
     setErrorMessage(null);
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
-      setErrorMessage('Session expired. Please sign in again.');
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        setErrorMessage('Session expired. Please sign in again.');
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ primary_team_id: teamId })
+        .eq('id', userData.user.id);
+
+      if (updateError) {
+        setErrorMessage(updateError.message);
+        return;
+      }
+
+      setCurrentTeamId(teamId);
+      router.replace(getSafeNextPath());
+    } catch {
+      setErrorMessage('Unexpected error while saving your team. Please try again.');
+    } finally {
       setSavingTeamId(null);
-      return;
     }
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ primary_team_id: teamId })
-      .eq('id', userData.user.id);
-
-    if (updateError) {
-      setErrorMessage(updateError.message);
-      setSavingTeamId(null);
-      return;
-    }
-
-    setCurrentTeamId(teamId);
-    setSavingTeamId(null);
-    router.replace('/war-room');
-    router.refresh();
   };
 
   return (
