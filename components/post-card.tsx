@@ -1,10 +1,18 @@
 'use client';
 
 import { reactionSummary, calculateScore } from '@/lib/domain';
-import { Post } from '@/lib/types';
+import { Post, ReactionType } from '@/lib/types';
 import { useLanguage } from '@/lib/language';
 
-export function PostCard({ post }: { post: Post }) {
+const reactionButtons: ReactionType[] = ['fire', 'laugh', 'clown'];
+
+type PostCardProps = {
+  post: Post;
+  onVote?: (postId: string, value: 1 | -1) => void;
+  onReaction?: (postId: string, reaction: ReactionType) => void;
+};
+
+export function PostCard({ post, onVote, onReaction }: PostCardProps) {
   const { language, t } = useLanguage();
 
   return (
@@ -15,6 +23,15 @@ export function PostCard({ post }: { post: Post }) {
       </div>
       <p>{post.body}</p>
       <div className="text-sm text-slate-300">{t('score')}: {calculateScore(post)} ({post.upvotes}↑ {post.downvotes}↓)</div>
+      <div className="flex flex-wrap gap-2">
+        <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => onVote?.(post.id, 1)}>Upvote</button>
+        <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => onVote?.(post.id, -1)}>Downvote</button>
+        {reactionButtons.map((reaction) => (
+          <button key={reaction} className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => onReaction?.(post.id, reaction)}>
+            {reaction}
+          </button>
+        ))}
+      </div>
       <div className="text-xs text-slate-400">{reactionSummary(post.reactions) || t('noReactionsYet')}</div>
     </article>
   );

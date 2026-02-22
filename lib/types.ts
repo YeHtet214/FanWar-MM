@@ -30,6 +30,8 @@ export type Post = {
   downvotes: number;
   reactions: Partial<Record<ReactionType, number>>;
   hidden: boolean;
+  reportCount: number;
+  strikeLinkedProfileId?: string;
 };
 
 export type UserProfile = {

@@ -39,7 +39,8 @@ export const posts: Post[] = [
     upvotes: 21,
     downvotes: 2,
     reactions: { fire: 8, laugh: 2 },
-    hidden: false
+    hidden: false,
+    reportCount: 0
   },
   {
     id: 'p2',
@@ -51,7 +52,8 @@ export const posts: Post[] = [
     upvotes: 8,
     downvotes: 5,
     reactions: { clown: 3, salty: 4 },
-    hidden: false
+    hidden: false,
+    reportCount: 0
   }
 ];
 
