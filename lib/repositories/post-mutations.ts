@@ -1,3 +1,4 @@
+import { shouldAutoHide } from '@/lib/domain';
 import { PostScope, ReactionType } from '@/lib/types';
 
 export async function createPostMutation(input: {
@@ -10,7 +11,10 @@ export async function createPostMutation(input: {
   const response = await fetch('/api/posts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input)
+    body: JSON.stringify({
+      ...input,
+      autoHidden: shouldAutoHide(input.body)
+    })
   });
 
   if (!response.ok) {
@@ -43,6 +47,39 @@ export async function reactPostMutation(postId: string, input: { userId: string;
 
   if (!response.ok) {
     throw new Error('Unable to update reaction');
+  }
+
+  return response.json();
+}
+
+export async function submitReportMutation(postId: string, input: { reporterId: string; reason: string }) {
+  const response = await fetch(`/api/posts/${postId}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to submit report');
+  }
+
+  return response.json();
+}
+
+export async function reviewReportMutation(input: {
+  reportId: string;
+  reviewerId: string;
+  decision: 'confirmed' | 'dismissed';
+  notes?: string;
+}) {
+  const response = await fetch('/api/moderation/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to review report');
   }
 
   return response.json();

@@ -41,6 +41,7 @@ export type UserProfile = {
   reputationTotal: number;
   strikeCount: number;
   rank: string;
+  moderationState?: 'none' | 'muted' | 'suspended' | 'banned';
 };
 
 export type ReputationLog = {

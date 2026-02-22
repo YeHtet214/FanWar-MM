@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ReactionType } from '@/lib/types';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getProfileModerationState, isPostingBlocked } from '@/lib/server/moderation';
 
 const reactionTypes: ReactionType[] = ['clown', 'fire', 'bottle', 'salty', 'laugh'];
 
@@ -18,6 +19,19 @@ export async function POST(request: Request, { params }: { params: { postId: str
 
   if (!userId || !reaction || !action || !reactionTypes.includes(reaction)) {
     return NextResponse.json({ error: 'Invalid reaction payload' }, { status: 400 });
+  }
+
+  try {
+    const profile = await getProfileModerationState(supabase, userId);
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    if (isPostingBlocked(profile.moderation_state)) {
+      return NextResponse.json({ error: 'Account is restricted from reactions' }, { status: 403 });
+    }
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 
   if (action === 'add') {

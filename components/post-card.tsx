@@ -10,9 +10,10 @@ type PostCardProps = {
   post: Post;
   onVote?: (postId: string, value: 1 | -1) => void;
   onReaction?: (postId: string, reaction: ReactionType) => void;
+  onReport?: (postId: string) => void;
 };
 
-export function PostCard({ post, onVote, onReaction }: PostCardProps) {
+export function PostCard({ post, onVote, onReaction, onReport }: PostCardProps) {
   const { language, t } = useLanguage();
 
   return (
@@ -31,6 +32,7 @@ export function PostCard({ post, onVote, onReaction }: PostCardProps) {
             {reaction}
           </button>
         ))}
+        <button className="rounded bg-red-900/60 px-2 py-1 text-xs" onClick={() => onReport?.(post.id)}>Report</button>
       </div>
       <div className="text-xs text-slate-400">{reactionSummary(post.reactions) || t('noReactionsYet')}</div>
     </article>
