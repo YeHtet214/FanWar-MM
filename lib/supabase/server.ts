@@ -3,9 +3,8 @@ import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-let serverSupabaseClient: SupabaseClient | null = null;
 
 export async function createSupabaseServerClient() {
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -34,9 +33,9 @@ export async function createSupabaseServerClient() {
 }
 
 /**
- * WARNING: SUPABASE_SERVICE_ROLE_KEY bypasses Row Level Security and grants full DB access.
- * Use this only in trusted server/admin contexts (e.g., server actions, API routes, background jobs),
- * never in client bundles. For client/limited operations, use anon keys with RLS or scoped service tokens.
+ * WARNING: Server-side privileged keys bypass Row Level Security and can grant broad DB access.
+ * Use trusted server-only keys (prefer SUPABASE_SECRET_KEY; fallback SUPABASE_SERVICE_ROLE_KEY),
+ * and never expose them in client bundles.
  */
 let serverSupabaseClient: SupabaseClient | null = null;
 
@@ -45,7 +44,7 @@ let serverSupabaseClient: SupabaseClient | null = null;
  * Keep this available for server components/API routes that require privileged access.
  */
 export function createServerSupabaseClient() {
-  if (!supabaseUrl || !supabaseServiceKey) {
+  if (!supabaseUrl || !supabaseSecretKey) {
     return null;
   }
 
@@ -53,7 +52,7 @@ export function createServerSupabaseClient() {
     return serverSupabaseClient;
   }
 
-  serverSupabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
+  serverSupabaseClient = createClient(supabaseUrl, supabaseSecretKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false
