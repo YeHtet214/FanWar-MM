@@ -1,6 +1,8 @@
-import { Team } from '@/lib/types';
 import { teams as fallbackTeams } from '@/lib/data';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { Team } from '@/lib/types';
+
+let supabaseClient: ReturnType<typeof createBrowserSupabaseClient> | null | undefined;
 
 type TeamRow = {
   id: string;
@@ -8,6 +10,21 @@ type TeamRow = {
   short_code: string;
   crest_url: string | null;
 };
+
+async function getSupabaseClient() {
+  if (supabaseClient !== undefined) {
+    return supabaseClient;
+  }
+
+  if (typeof window === 'undefined') {
+    const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+    supabaseClient = createServerSupabaseClient();
+    return supabaseClient;
+  }
+
+  supabaseClient = createBrowserSupabaseClient();
+  return supabaseClient;
+}
 
 function mapTeam(row: TeamRow): Team {
   return {
@@ -19,7 +36,7 @@ function mapTeam(row: TeamRow): Team {
 }
 
 export async function getTeams(): Promise<Team[]> {
-  const supabase = createBrowserSupabaseClient();
+  const supabase = await getSupabaseClient();
   if (!supabase) {
     return fallbackTeams;
   }
@@ -29,5 +46,5 @@ export async function getTeams(): Promise<Team[]> {
     return fallbackTeams;
   }
 
-  return data.map(mapTeam);
+  return (data as TeamRow[]).map(mapTeam);
 }

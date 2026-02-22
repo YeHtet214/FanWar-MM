@@ -1,6 +1,10 @@
-import { Post, ReactionType } from '@/lib/types';
 import { posts as fallbackPosts } from '@/lib/data';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { Post, ReactionType } from '@/lib/types';
+
+let supabaseClient: ReturnType<typeof createBrowserSupabaseClient> | null | undefined;
+
+type ProfileJoin = { username: string } | Array<{ username: string }> | null;
 
 type PostRow = {
   id: string;
@@ -12,13 +16,34 @@ type PostRow = {
   downvotes: number;
   is_hidden: boolean;
   created_at: string;
-  profiles: Array<{
-    username: string;
-  }> | null;
+  profiles: ProfileJoin;
   post_reactions: Array<{
     reaction: ReactionType;
   }> | null;
 };
+
+async function getSupabaseClient() {
+  if (supabaseClient !== undefined) {
+    return supabaseClient;
+  }
+
+  if (typeof window === 'undefined') {
+    const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+    supabaseClient = createServerSupabaseClient();
+    return supabaseClient;
+  }
+
+  supabaseClient = createBrowserSupabaseClient();
+  return supabaseClient;
+}
+
+function getUsername(profiles: ProfileJoin) {
+  if (!profiles) {
+    return 'Unknown';
+  }
+
+  return Array.isArray(profiles) ? profiles[0]?.username ?? 'Unknown' : profiles.username;
+}
 
 function mapReactions(rows: PostRow['post_reactions']) {
   if (!rows) {
@@ -34,7 +59,7 @@ function mapReactions(rows: PostRow['post_reactions']) {
 function mapPost(row: PostRow): Post {
   return {
     id: row.id,
-    author: row.profiles?.[0]?.username ?? 'Unknown',
+    author: getUsername(row.profiles),
     scope: row.scope,
     teamId: row.team_id ?? undefined,
     matchId: row.match_id ?? undefined,
@@ -47,30 +72,59 @@ function mapPost(row: PostRow): Post {
   };
 }
 
+const postSelect = 'id, scope, team_id, match_id, body, upvotes, downvotes, is_hidden, created_at, profiles:author_id(username), post_reactions(reaction)';
+
 export async function getPosts(): Promise<Post[]> {
-  const supabase = createBrowserSupabaseClient();
+  const supabase = await getSupabaseClient();
   if (!supabase) {
     return fallbackPosts;
   }
 
-  const { data, error } = await supabase
-    .from('posts')
-    .select('id, scope, team_id, match_id, body, upvotes, downvotes, is_hidden, created_at, profiles:author_id(username), post_reactions(reaction)')
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('posts').select(postSelect).order('created_at', { ascending: false });
 
   if (error || !data) {
     return fallbackPosts;
   }
 
-  return data.map((row) => mapPost(row as PostRow));
+  return (data as PostRow[]).map(mapPost);
 }
 
-export async function getPostsForTeam(teamId: string) {
-  const all = await getPosts();
-  return all.filter((post) => post.scope === 'team_room' && post.teamId === teamId);
+export async function getPostsForTeam(teamId: string): Promise<Post[]> {
+  const supabase = await getSupabaseClient();
+  if (!supabase) {
+    return fallbackPosts.filter((post) => post.scope === 'team_room' && post.teamId === teamId);
+  }
+
+  const { data, error } = await supabase
+    .from('posts')
+    .select(postSelect)
+    .eq('scope', 'team_room')
+    .eq('team_id', teamId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) {
+    return fallbackPosts.filter((post) => post.scope === 'team_room' && post.teamId === teamId);
+  }
+
+  return (data as PostRow[]).map(mapPost);
 }
 
-export async function getPostsForMatch(matchId: string) {
-  const all = await getPosts();
-  return all.filter((post) => post.scope === 'match_thread' && post.matchId === matchId);
+export async function getPostsForMatch(matchId: string): Promise<Post[]> {
+  const supabase = await getSupabaseClient();
+  if (!supabase) {
+    return fallbackPosts.filter((post) => post.scope === 'match_thread' && post.matchId === matchId);
+  }
+
+  const { data, error } = await supabase
+    .from('posts')
+    .select(postSelect)
+    .eq('scope', 'match_thread')
+    .eq('match_id', matchId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) {
+    return fallbackPosts.filter((post) => post.scope === 'match_thread' && post.matchId === matchId);
+  }
+
+  return (data as PostRow[]).map(mapPost);
 }

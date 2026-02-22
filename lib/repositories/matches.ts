@@ -1,6 +1,8 @@
-import { Match } from '@/lib/types';
 import { matches as fallbackMatches } from '@/lib/data';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { Match } from '@/lib/types';
+
+let supabaseClient: ReturnType<typeof createBrowserSupabaseClient> | null | undefined;
 
 type MatchRow = {
   id: string;
@@ -10,6 +12,21 @@ type MatchRow = {
   status: 'scheduled' | 'live' | 'finished';
   is_live: boolean;
 };
+
+async function getSupabaseClient() {
+  if (supabaseClient !== undefined) {
+    return supabaseClient;
+  }
+
+  if (typeof window === 'undefined') {
+    const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+    supabaseClient = createServerSupabaseClient();
+    return supabaseClient;
+  }
+
+  supabaseClient = createBrowserSupabaseClient();
+  return supabaseClient;
+}
 
 function mapMatch(row: MatchRow): Match {
   return {
@@ -23,7 +40,7 @@ function mapMatch(row: MatchRow): Match {
 }
 
 export async function getMatches(): Promise<Match[]> {
-  const supabase = createBrowserSupabaseClient();
+  const supabase = await getSupabaseClient();
   if (!supabase) {
     return fallbackMatches;
   }
@@ -37,10 +54,10 @@ export async function getMatches(): Promise<Match[]> {
     return fallbackMatches;
   }
 
-  return data.map(mapMatch);
+  return (data as MatchRow[]).map(mapMatch);
 }
 
 export async function getMatchById(matchId: string): Promise<Match | null> {
   const all = await getMatches();
-  return all.find((match) => match.id === matchId) ?? all[0] ?? null;
+  return all.find((match) => match.id === matchId) ?? null;
 }

@@ -1,48 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { StepPanel } from '@/components/step-panel';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useLanguage } from '@/lib/language';
 import { getTeams } from '@/lib/repositories/teams';
 import { Team } from '@/lib/types';
 
 export default function OnboardingPage() {
   const { t } = useLanguage();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      setLoading(true);
-      try {
-        const rows = await getTeams();
-
-        if (!active) {
-          return;
-        }
-
-        setTeams(rows);
-        setError(null);
-      } catch {
-        if (active) {
-          setError('Failed to load teams.');
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { data, loading, error } = useAsyncData<Team[]>(getTeams, []);
+  const teams = data ?? [];
 
   return (
     <section className="space-y-4">
@@ -50,7 +17,7 @@ export default function OnboardingPage() {
       <StepPanel step={1} title={t('createAccount')} details={t('createAccountDesc')} />
       <StepPanel step={2} title={t('pickClub')} details={t('pickClubDesc')} />
       {loading && <p className="card text-slate-300">Loading teams...</p>}
-      {error && <p className="card text-red-300">{error}</p>}
+      {error && <p className="card text-red-300">Failed to load teams.</p>}
       {!loading && !error && teams.length === 0 && <p className="card text-slate-300">No teams available.</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {teams.map((team) => (

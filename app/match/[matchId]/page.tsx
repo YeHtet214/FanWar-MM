@@ -26,7 +26,16 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
       try {
         const currentMatch = await getMatchById(params.matchId);
 
-        if (!active || !currentMatch) {
+        if (!active) {
+          return;
+        }
+
+        if (!currentMatch) {
+          setMatch(null);
+          setHome(null);
+          setAway(null);
+          setThreadPosts([]);
+          setError('Match not found.');
           return;
         }
 
@@ -61,7 +70,11 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-bold">{home?.name} vs {away?.name} {t('battleground')}</h1>
+      {home && away ? (
+        <h1 className="text-2xl font-bold">{home.name} vs {away.name} {t('battleground')}</h1>
+      ) : (
+        <h1 className="text-2xl font-bold">{loading ? 'Loading match...' : t('battleground')}</h1>
+      )}
       {loading && <p className="card text-slate-300">Loading thread...</p>}
       {error && <p className="card text-red-300">{error}</p>}
       {match && (

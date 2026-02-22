@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import Image from 'next/image';
 import { memeTemplates } from '@/lib/data';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useLanguage } from '@/lib/language';
 import { getMatches } from '@/lib/repositories/matches';
 import { getTeams } from '@/lib/repositories/teams';
@@ -10,52 +11,22 @@ import { Match, Team } from '@/lib/types';
 
 export default function MemePage() {
   const { t } = useLanguage();
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error } = useAsyncData<[Match[], Team[]]>(async () => Promise.all([getMatches(), getTeams()]), []);
 
-  useEffect(() => {
-    let active = true;
+  const matches = data?.[0] ?? [];
+  const teams = data?.[1] ?? [];
 
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [matchRows, teamRows] = await Promise.all([getMatches(), getTeams()]);
-
-        if (!active) {
-          return;
-        }
-
-        setMatches(matchRows);
-        setTeams(teamRows);
-        setError(null);
-      } catch {
-        if (active) {
-          setError('Failed to load meme setup data.');
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const firstMatch = matches[0];
-  const targetTeam = teams.find((team) => team.id === firstMatch?.awayTeamId);
+  const firstMatch = useMemo(() => matches[0], [matches]);
+  const targetTeam = useMemo(
+    () => teams.find((team) => team.id === firstMatch?.awayTeamId),
+    [teams, firstMatch?.awayTeamId]
+  );
 
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-bold">{t('memeGenerator')}</h1>
       {loading && <p className="card text-slate-300">Loading match data...</p>}
-      {error && <p className="card text-red-300">{error}</p>}
+      {error && <p className="card text-red-300">Failed to load meme setup data.</p>}
       {!loading && !error && !firstMatch && <p className="card text-slate-300">No matches available.</p>}
       {firstMatch && (
         <div className="card space-y-3">

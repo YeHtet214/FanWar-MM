@@ -1,31 +1,54 @@
-import { UserProfile } from '@/lib/types';
 import { leaderboard as fallbackLeaderboard } from '@/lib/data';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { UserProfile } from '@/lib/types';
+
+let supabaseClient: ReturnType<typeof createBrowserSupabaseClient> | null | undefined;
 
 type LeaderboardRow = {
   user_id: string;
   rank: number | null;
   points: number;
-  profiles: Array<{
+  profiles: {
     username: string;
     primary_team_id: string;
     strike_count: number;
-  }> | null;
+  } | null;
 };
 
-function mapRow(row: LeaderboardRow): UserProfile {
+async function getSupabaseClient() {
+  if (supabaseClient !== undefined) {
+    return supabaseClient;
+  }
+
+  if (typeof window === 'undefined') {
+    const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+    supabaseClient = createServerSupabaseClient();
+    return supabaseClient;
+  }
+
+  supabaseClient = createBrowserSupabaseClient();
+  return supabaseClient;
+}
+
+function normalizeProfile(profile: LeaderboardRow['profiles'] | LeaderboardRow['profiles'][] | undefined) {
+  return Array.isArray(profile) ? profile[0] ?? null : profile ?? null;
+}
+
+function mapRow(row: Omit<LeaderboardRow, 'profiles'> & { profiles: LeaderboardRow['profiles'] | LeaderboardRow['profiles'][] }): UserProfile {
+  const profile = normalizeProfile(row.profiles);
+
   return {
     id: row.user_id,
-    username: row.profiles?.[0]?.username ?? 'Unknown',
-    primaryTeamId: row.profiles?.[0]?.primary_team_id ?? '',
+    username: profile?.username ?? 'Unknown',
+    primaryTeamId: profile?.primary_team_id ?? '',
     reputationTotal: row.points,
-    strikeCount: row.profiles?.[0]?.strike_count ?? 0,
+    strikeCount: profile?.strike_count ?? 0,
     rank: row.rank ? `#${row.rank}` : 'Unranked'
   };
 }
 
 export async function getLeaderboard(): Promise<UserProfile[]> {
-  const supabase = createBrowserSupabaseClient();
+  const supabase = await getSupabaseClient();
   if (!supabase) {
     return fallbackLeaderboard;
   }
@@ -39,5 +62,5 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
     return fallbackLeaderboard;
   }
 
-  return data.map((row) => mapRow(row as LeaderboardRow));
+  return data.map((row) => mapRow(row as Omit<LeaderboardRow, 'profiles'> & { profiles: LeaderboardRow['profiles'] | LeaderboardRow['profiles'][] }));
 }

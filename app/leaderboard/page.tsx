@@ -55,7 +55,7 @@ export default function LeaderboardPage() {
       {loading && <p className="card text-slate-300">Loading leaderboard...</p>}
       {error && <p className="card text-red-300">{error}</p>}
       {!loading && !error && sortedRows.length === 0 && <p className="card text-slate-300">No leaderboard data available.</p>}
-      {!error && sortedRows.length > 0 && (
+      {!loading && !error && sortedRows.length > 0 && (
         <div className="card overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-slate-400">
