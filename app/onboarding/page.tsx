@@ -1,24 +1,136 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { teams } from '@/lib/data';
 import { StepPanel } from '@/components/step-panel';
 import { useLanguage } from '@/lib/language';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+
+type ProfileRow = {
+  primary_team_id: string | null;
+  is_admin: boolean | null;
+};
 
 export default function OnboardingPage() {
   const { t } = useLanguage();
+  const router = useRouter();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  const [loading, setLoading] = useState(true);
+  const [savingTeamId, setSavingTeamId] = useState<string | null>(null);
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
+  const [canOverrideSelection, setCanOverrideSelection] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!supabase) {
+        setErrorMessage('Supabase is not configured.');
+        setLoading(false);
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        setErrorMessage('Please sign in before onboarding.');
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('primary_team_id, is_admin')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (profileError) {
+        setErrorMessage(profileError.message);
+      } else {
+        const profileRow = profile as ProfileRow;
+        setCurrentTeamId(profileRow.primary_team_id);
+        const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
+        setCanOverrideSelection(Boolean(overrideRequested && profileRow.is_admin));
+      }
+
+      setLoading(false);
+    };
+
+    loadProfile();
+  }, [supabase]);
+
+  const selectTeam = async (teamId: string) => {
+    if (!supabase) {
+      setErrorMessage('Supabase is not configured.');
+      return;
+    }
+
+    if (currentTeamId && !canOverrideSelection) {
+      return;
+    }
+
+    setSavingTeamId(teamId);
+    setErrorMessage(null);
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      setErrorMessage('Session expired. Please sign in again.');
+      setSavingTeamId(null);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ primary_team_id: teamId })
+      .eq('id', userData.user.id);
+
+    if (updateError) {
+      setErrorMessage(updateError.message);
+      setSavingTeamId(null);
+      return;
+    }
+
+    setCurrentTeamId(teamId);
+    setSavingTeamId(null);
+    router.replace('/war-room');
+    router.refresh();
+  };
 
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-bold">{t('onboardingTitle')}</h1>
       <StepPanel step={1} title={t('createAccount')} details={t('createAccountDesc')} />
       <StepPanel step={2} title={t('pickClub')} details={t('pickClubDesc')} />
+
+      {currentTeamId && !canOverrideSelection ? (
+        <div className="card border border-emerald-600 bg-emerald-950/30 text-emerald-200">
+          Team already selected. Use the admin override flow if your policy allows changes.
+        </div>
+      ) : null}
+
+      {errorMessage ? (
+        <div className="card border border-red-600 bg-red-950/30 text-red-200">{errorMessage}</div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
-        {teams.map((team) => (
-          <article key={team.id} className="card flex items-center justify-between">
-            <span className="text-lg">{team.crest} {team.name}</span>
-            <button className="rounded-md bg-red-600 px-3 py-1 text-sm">{t('select')}</button>
-          </article>
-        ))}
+        {teams.map((team) => {
+          const isSelected = currentTeamId === team.id;
+          const disabled = loading || Boolean(savingTeamId) || (Boolean(currentTeamId) && !canOverrideSelection);
+
+          return (
+            <article key={team.id} className="card flex items-center justify-between">
+              <span className="text-lg">{team.crest} {team.name}</span>
+              <button
+                className="rounded-md bg-red-600 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={disabled}
+                onClick={() => selectTeam(team.id)}
+                type="button"
+              >
+                {savingTeamId === team.id ? 'Saving...' : isSelected ? 'Selected' : t('select')}
+              </button>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
