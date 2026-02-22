@@ -33,12 +33,6 @@ export async function createSupabaseServerClient() {
   });
 }
 
-/**
- * WARNING: SUPABASE_SERVICE_ROLE_KEY bypasses Row Level Security and grants full DB access.
- * Use this only in trusted server/admin contexts (e.g., server actions, API routes, background jobs),
- * never in client bundles. For client/limited operations, use anon keys with RLS or scoped service tokens.
- */
-let serverSupabaseClient: SupabaseClient | null = null;
 
 /**
  * Server-side Supabase factory for trusted backend usage.
