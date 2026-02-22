@@ -62,5 +62,5 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
     return fallbackLeaderboard;
   }
 
-  return data.map((row) => mapRow(row as Omit<LeaderboardRow, 'profiles'> & { profiles: LeaderboardRow['profiles'] | LeaderboardRow['profiles'][] }));
+  return data.map((row: Omit<LeaderboardRow, 'profiles'> & { profiles: LeaderboardRow['profiles'] | LeaderboardRow['profiles'][] }) => mapRow(row));
 }

@@ -57,6 +57,8 @@ create table if not exists posts (
   score int not null default 0,
   is_hidden boolean not null default false,
   hidden_reason text,
+  report_count int not null default 0,
+  strike_linked_profile_id uuid references profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint post_scope_target_chk check (

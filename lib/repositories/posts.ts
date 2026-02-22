@@ -15,6 +15,8 @@ type PostRow = {
   upvotes: number;
   downvotes: number;
   is_hidden: boolean;
+  report_count: number;
+  strike_linked_profile_id: string | null;
   created_at: string;
   profiles: ProfileJoin;
   post_reactions: Array<{
@@ -68,11 +70,13 @@ function mapPost(row: PostRow): Post {
     upvotes: row.upvotes,
     downvotes: row.downvotes,
     hidden: row.is_hidden,
+    reportCount: row.report_count,
+    strikeLinkedProfileId: row.strike_linked_profile_id ?? undefined,
     reactions: mapReactions(row.post_reactions)
   };
 }
 
-const postSelect = 'id, scope, team_id, match_id, body, upvotes, downvotes, is_hidden, created_at, profiles:author_id(username), post_reactions(reaction)';
+const postSelect = 'id, scope, team_id, match_id, body, upvotes, downvotes, is_hidden, report_count, strike_linked_profile_id, created_at, profiles:author_id(username), post_reactions(reaction)';
 
 export async function getPosts(): Promise<Post[]> {
   const supabase = await getSupabaseClient();
@@ -80,7 +84,7 @@ export async function getPosts(): Promise<Post[]> {
     return fallbackPosts;
   }
 
-  const { data, error } = await supabase.from('posts').select(postSelect).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('posts').select(postSelect).order('score', { ascending: false }).order('created_at', { ascending: false });
 
   if (error || !data) {
     return fallbackPosts;
@@ -100,6 +104,7 @@ export async function getPostsForTeam(teamId: string): Promise<Post[]> {
     .select(postSelect)
     .eq('scope', 'team_room')
     .eq('team_id', teamId)
+    .order('score', { ascending: false })
     .order('created_at', { ascending: false });
 
   if (error || !data) {
@@ -120,6 +125,7 @@ export async function getPostsForMatch(matchId: string): Promise<Post[]> {
     .select(postSelect)
     .eq('scope', 'match_thread')
     .eq('match_id', matchId)
+    .order('score', { ascending: false })
     .order('created_at', { ascending: false });
 
   if (error || !data) {
