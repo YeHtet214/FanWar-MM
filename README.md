@@ -57,7 +57,7 @@ cp .env.local.example .env.local
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-publishable-key>
-SUPABASE_SECRET_KEY=<your-secret-key>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=<your-secret-key>
 # Legacy fallback (optional):
 # SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 ```
