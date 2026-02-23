@@ -18,10 +18,19 @@ function getSafeNextPath() {
   return isAllowed ? nextPath : '/onboarding';
 }
 
-async function getPostLoginPath(supabase: NonNullable<ReturnType<typeof createSupabaseBrowserClient>>, requestedPath: string) {
+type PostLoginStatus = {
+  path: string;
+  needsOnboarding: boolean;
+  isAuthenticated: boolean;
+};
+
+async function getPostLoginStatus(
+  supabase: NonNullable<ReturnType<typeof createSupabaseBrowserClient>>,
+  requestedPath: string
+): Promise<PostLoginStatus> {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) {
-    return '/auth';
+    return { path: '/auth', needsOnboarding: false, isAuthenticated: false };
   }
 
   const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
@@ -29,7 +38,7 @@ async function getPostLoginPath(supabase: NonNullable<ReturnType<typeof createSu
     : null;
 
   if (metadataTeam) {
-    return requestedPath;
+    return { path: requestedPath, needsOnboarding: false, isAuthenticated: true };
   }
 
   const { data: profile } = await supabase
@@ -39,10 +48,10 @@ async function getPostLoginPath(supabase: NonNullable<ReturnType<typeof createSu
     .maybeSingle();
 
   if (!profile?.primary_team_id) {
-    return '/onboarding';
+    return { path: '/onboarding', needsOnboarding: true, isAuthenticated: true };
   }
 
-  return requestedPath;
+  return { path: requestedPath, needsOnboarding: false, isAuthenticated: true };
 }
 
 export default function AuthPage() {
@@ -55,6 +64,7 @@ export default function AuthPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     if (!cooldownEndsAt) {
@@ -83,9 +93,10 @@ export default function AuthPage() {
 
     const checkSession = async () => {
       const requestedPath = getSafeNextPath();
-      const path = await getPostLoginPath(client, requestedPath);
-      if (path !== '/auth') {
-        router.replace(path);
+      const status = await getPostLoginStatus(client, requestedPath);
+      setNeedsOnboarding(status.needsOnboarding);
+      if (status.isAuthenticated && !status.needsOnboarding && status.path !== '/auth') {
+        router.replace(status.path);
       }
     };
 
@@ -94,9 +105,10 @@ export default function AuthPage() {
     } = client.auth.onAuthStateChange(async (event: AuthChangeEvent) => {
       if (event === 'SIGNED_IN') {
         const requestedPath = getSafeNextPath();
-        const path = await getPostLoginPath(client, requestedPath);
-        if (path !== '/auth') {
-          router.replace(path);
+        const status = await getPostLoginStatus(client, requestedPath);
+        setNeedsOnboarding(status.needsOnboarding);
+        if (!status.needsOnboarding && status.path !== '/auth') {
+          router.replace(status.path);
         }
       }
     });
@@ -165,6 +177,33 @@ export default function AuthPage() {
       <p className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300">
         Important: open the magic link in the same browser and device where you requested it.
       </p>
+
+
+      {needsOnboarding ? (
+        <div className="card border border-amber-700 bg-amber-950/30 text-amber-100 space-y-2">
+          <p>You are signed in, but your team selection is incomplete.</p>
+          <div className="flex gap-2">
+            <button
+              className="rounded-md bg-red-600 px-3 py-1 text-sm"
+              onClick={() => router.push('/onboarding')}
+              type="button"
+            >
+              Continue onboarding
+            </button>
+            <button
+              className="rounded-md border border-slate-500 px-3 py-1 text-sm"
+              onClick={async () => {
+                if (!supabase) return;
+                await supabase.auth.signOut();
+                setNeedsOnboarding(false);
+              }}
+              type="button"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <form className="card space-y-3" onSubmit={handleSendMagicLink}>
         <label className="block space-y-1" htmlFor="email">

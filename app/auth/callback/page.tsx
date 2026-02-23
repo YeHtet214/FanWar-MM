@@ -24,19 +24,29 @@ export default function AuthCallbackPage() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showRetryHint, setShowRetryHint] = useState(false);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowRetryHint(true);
+    }, 7000);
+
     const handleAuthCallback = async () => {
       try {
-      if (!supabase) {
-        setErrorMessage('Supabase is not configured.');
-        return;
-      }
+        if (!supabase) {
+          setErrorMessage('Supabase is not configured.');
+          return;
+        }
 
-      const searchParams = new URLSearchParams(window.location.search);
-      const code = searchParams.get('code');
-      const tokenHash = searchParams.get('token_hash');
-      const otpType = searchParams.get('type');
+        const searchParams = new URLSearchParams(window.location.search);
+        const code = searchParams.get('code');
+        const tokenHash = searchParams.get('token_hash');
+        const otpType = searchParams.get('type');
+
+        if (!code && !(tokenHash && otpType)) {
+          setErrorMessage('Invalid sign-in link. Please request a new magic link from the auth page.');
+          return;
+        }
 
       if (tokenHash && otpType) {
         const { error } = await supabase.auth.verifyOtp({
@@ -88,14 +98,20 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      router.replace(requestedPath);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unexpected authentication error.';
-      setErrorMessage(message);
-    }
+        router.replace(requestedPath);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unexpected authentication error.';
+        setErrorMessage(message);
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
     };
 
     handleAuthCallback();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [router, supabase]);
 
   return (
@@ -103,6 +119,11 @@ export default function AuthCallbackPage() {
       <h1 className="text-2xl font-bold">Signing you in...</h1>
       <p className="text-slate-300">Please wait while we verify your magic link and restore your session.</p>
       {errorMessage ? <p className="card border border-red-700 bg-red-950/30 text-red-200">{errorMessage}</p> : null}
+      {showRetryHint && !errorMessage ? (
+        <div className="card border border-amber-700 bg-amber-950/30 text-amber-100">
+          This is taking longer than expected. If it does not continue, return to <a className="underline" href="/auth">/auth</a> and request a new magic link.
+        </div>
+      ) : null}
     </section>
   );
 }

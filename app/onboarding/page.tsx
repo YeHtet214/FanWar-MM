@@ -57,6 +57,7 @@ export default function OnboardingPage() {
   const [canOverrideSelection, setCanOverrideSelection] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isTeamFromCookieFallback, setIsTeamFromCookieFallback] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -91,7 +92,10 @@ export default function OnboardingPage() {
       }
 
       const profileRow = profile as ProfileRow | null;
-      setCurrentTeamId(metadataTeam ?? profileRow?.primary_team_id ?? getClientTeamCookie());
+      const cookieTeam = getClientTeamCookie();
+      const resolvedTeam = metadataTeam ?? profileRow?.primary_team_id ?? cookieTeam;
+      setCurrentTeamId(resolvedTeam);
+      setIsTeamFromCookieFallback(Boolean(!metadataTeam && !profileRow?.primary_team_id && cookieTeam));
       const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
       const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
       setCanOverrideSelection(Boolean(overrideRequested && isAdminFromMetadata));
@@ -113,7 +117,7 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (currentTeamId && !canOverrideSelection) {
+    if (currentTeamId && !canOverrideSelection && !isTeamFromCookieFallback) {
       return;
     }
 
@@ -167,6 +171,7 @@ export default function OnboardingPage() {
       }
 
       setCurrentTeamId(teamId);
+      setIsTeamFromCookieFallback(false);
       router.replace(getSafeNextPath());
     } catch {
       setErrorMessage('Unexpected error while saving your team. Please try again.');
@@ -226,7 +231,7 @@ export default function OnboardingPage() {
             teamsLoading ||
             Boolean(savingTeamId) ||
             isAuthenticated === false ||
-            (Boolean(currentTeamId) && !canOverrideSelection);
+            (Boolean(currentTeamId) && !canOverrideSelection && !isTeamFromCookieFallback);
 
           return (
             <article key={team.id} className="card flex items-center justify-between">
