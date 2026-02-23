@@ -10,6 +10,7 @@ type SetAllCookies = {
 
 const protectedPrefixes = ['/war-room', '/match', '/meme', '/leaderboard', '/moderation'];
 const profileCacheCookie = 'fw_profile_cache';
+const clientTeamCookieName = 'fw_primary_team_id';
 
 type ProfileCache = {
   primary_team_id: string | null;
@@ -88,7 +89,8 @@ export async function middleware(request: NextRequest) {
     : null;
   const cachedProfile = readProfileCache(request.cookies.get(profileCacheCookie)?.value);
 
-  let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? null;
+  const cookieTeam = request.cookies.get(clientTeamCookieName)?.value ?? null;
+  let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? cookieTeam ?? null;
   let isAdmin = metadataIsAdmin;
 
   if (primaryTeamId === null) {

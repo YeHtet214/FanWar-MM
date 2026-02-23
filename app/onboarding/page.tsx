@@ -24,6 +24,16 @@ function buildUsernameCandidate(user: User) {
   return `${sanitized}_${suffix}`;
 }
 
+
+function getClientTeamCookie() {
+  const match = document.cookie.match(/(?:^|; )fw_primary_team_id=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setClientTeamCookie(teamId: string) {
+  document.cookie = `fw_primary_team_id=${encodeURIComponent(teamId)}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+}
+
 function getSafeNextPath() {
   const nextPath = new URLSearchParams(window.location.search).get('next');
   if (!nextPath || !nextPath.startsWith('/')) {
@@ -81,7 +91,7 @@ export default function OnboardingPage() {
       }
 
       const profileRow = profile as ProfileRow | null;
-      setCurrentTeamId(metadataTeam ?? profileRow?.primary_team_id ?? null);
+      setCurrentTeamId(metadataTeam ?? profileRow?.primary_team_id ?? getClientTeamCookie());
       const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
       const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
       setCanOverrideSelection(Boolean(overrideRequested && isAdminFromMetadata));
@@ -125,6 +135,9 @@ export default function OnboardingPage() {
         setErrorMessage(`Could not save your team in your account session. ${metadataError.message}`);
         return;
       }
+
+      setClientTeamCookie(teamId);
+      await supabase.auth.refreshSession();
 
       const { data: updatedRows, error: updateError } = await supabase
         .from('profiles')
