@@ -27,13 +27,9 @@ export default function TeamOverridePage() {
         return;
       }
 
-      const { data: adminProfile, error: adminError } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', userData.user.id)
-        .single();
+      const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
 
-      if (adminError || !adminProfile?.is_admin) {
+      if (!isAdminFromMetadata) {
         setStatus('Admin access is required for overrides.');
         return;
       }

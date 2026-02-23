@@ -42,7 +42,7 @@ export async function getTeams(): Promise<Team[]> {
   }
 
   const { data, error } = await supabase.from('teams').select('id, name, short_code, crest_url').order('name');
-  if (error || !data) {
+  if (error || !data || data.length === 0) {
     return fallbackTeams;
   }
 

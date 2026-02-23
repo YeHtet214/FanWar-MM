@@ -11,7 +11,6 @@ import { Team } from '@/lib/types';
 
 type ProfileRow = {
   primary_team_id: string | null;
-  is_admin: boolean | null;
 };
 
 const allowedNextPrefixes = ['/war-room', '/match/', '/meme', '/leaderboard', '/moderation'];
@@ -60,17 +59,18 @@ export default function OnboardingPage() {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('primary_team_id, is_admin')
+        .select('primary_team_id')
         .eq('id', userData.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
         setErrorMessage(profileError.message);
       } else {
-        const profileRow = profile as ProfileRow;
-        setCurrentTeamId(profileRow.primary_team_id);
+        const profileRow = profile as ProfileRow | null;
+        setCurrentTeamId(profileRow?.primary_team_id ?? null);
         const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
-        setCanOverrideSelection(Boolean(overrideRequested && profileRow.is_admin));
+        const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
+        setCanOverrideSelection(Boolean(overrideRequested && isAdminFromMetadata));
       }
 
       setProfileLoading(false);

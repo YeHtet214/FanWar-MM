@@ -13,7 +13,6 @@ const profileCacheCookie = 'fw_profile_cache';
 
 type ProfileCache = {
   primary_team_id: string | null;
-  is_admin: boolean;
   exp: number;
 };
 
@@ -33,7 +32,6 @@ function readProfileCache(rawValue?: string): ProfileCache | null {
     }
     return {
       primary_team_id: parsed.primary_team_id ?? null,
-      is_admin: Boolean(parsed.is_admin),
       exp: parsed.exp
     };
   } catch {
@@ -91,21 +89,19 @@ export async function middleware(request: NextRequest) {
   const cachedProfile = readProfileCache(request.cookies.get(profileCacheCookie)?.value);
 
   let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? null;
-  let isAdmin = metadataIsAdmin ?? cachedProfile?.is_admin ?? null;
+  let isAdmin = metadataIsAdmin;
 
-  if (primaryTeamId === null || isAdmin === null) {
+  if (primaryTeamId === null) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('primary_team_id, is_admin')
+      .select('primary_team_id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     primaryTeamId = profile?.primary_team_id ?? null;
-    isAdmin = Boolean(profile?.is_admin);
 
     response.cookies.set(profileCacheCookie, JSON.stringify({
       primary_team_id: primaryTeamId,
-      is_admin: isAdmin,
       exp: Date.now() + (5 * 60 * 1000)
     }), {
       httpOnly: true,
