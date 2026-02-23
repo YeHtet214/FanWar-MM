@@ -5,7 +5,7 @@ import { PostCard } from '@/components/post-card';
 import { rankFeed } from '@/lib/domain';
 import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useLanguage } from '@/lib/language';
-import { reactPostMutation, votePostMutation, createPostMutation } from '@/lib/repositories/post-mutations';
+import { reactPostMutation, votePostMutation, createPostMutation, submitReportMutation } from '@/lib/repositories/post-mutations';
 import { getPostsForTeam } from '@/lib/repositories/posts';
 import { getTeams } from '@/lib/repositories/teams';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -120,6 +120,22 @@ export default function WarRoomPage() {
     }
   };
 
+  const handleReport = async (postId: string) => {
+    const reason = window.prompt('Why are you reporting this post?');
+    if (!reason?.trim()) {
+      return;
+    }
+
+    try {
+      await submitReportMutation(postId, { reason: reason.trim() });
+      const refreshed = await getPostsForTeam(DEFAULT_TEAM_ID);
+      setPostsState(rankFeed(refreshed));
+    } catch (error) {
+      console.error('Failed to submit report', { error, postId, reporterId: DEMO_USER_ID });
+      window.alert('Failed to submit report. Please try again.');
+    }
+  };
+
   return (
     <section className="space-y-4">
       {team ? (
@@ -137,7 +153,7 @@ export default function WarRoomPage() {
       {!loading && !error && teamPosts.length === 0 && <p className="card text-slate-300">No posts yet.</p>}
       <div className="space-y-3">
         {teamPosts.map((post) => (
-          <PostCard key={post.id} post={post} onVote={handleVote} onReaction={handleReaction} />
+          <PostCard key={post.id} post={post} onVote={handleVote} onReaction={handleReaction} onReport={handleReport} />
         ))}
       </div>
     </section>

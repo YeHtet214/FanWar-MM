@@ -18,6 +18,8 @@ export type PostScope = 'team_room' | 'match_thread';
 
 export type ReactionType = 'clown' | 'fire' | 'bottle' | 'salty' | 'laugh';
 
+export type ModerationState = 'none' | 'muted' | 'suspended' | 'banned';
+
 export type Post = {
   id: string;
   author: string;
@@ -41,6 +43,7 @@ export type UserProfile = {
   reputationTotal: number;
   strikeCount: number;
   rank: string;
+  moderationState?: ModerationState;
 };
 
 export type ReputationLog = {

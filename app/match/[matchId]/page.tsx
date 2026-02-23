@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { PostCard } from '@/components/post-card';
 import { rankFeed } from '@/lib/domain';
 import { useLanguage } from '@/lib/language';
-import { createPostMutation, reactPostMutation, votePostMutation } from '@/lib/repositories/post-mutations';
+import { createPostMutation, reactPostMutation, submitReportMutation, votePostMutation } from '@/lib/repositories/post-mutations';
 import { getMatchById } from '@/lib/repositories/matches';
 import { getPostsForMatch } from '@/lib/repositories/posts';
 import { getTeams } from '@/lib/repositories/teams';
@@ -161,6 +161,21 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
     }
   };
 
+  const handleReport = async (postId: string, reason: string) => {
+    if (!match) {
+      return;
+    }
+
+    try {
+      await submitReportMutation(postId, { reason });
+      const refreshed = await getPostsForMatch(match.id);
+      setThreadPosts(rankFeed(refreshed));
+    } catch (e) {
+      console.error('Failed to submit match-thread report', { e, postId, reporterId: DEMO_USER_ID });
+      window.alert('Failed to submit report. Please try again.');
+    }
+  };
+
   return (
     <section className="space-y-4">
       {home && away ? (
@@ -183,7 +198,20 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
       </form>
       {!loading && !error && threadPosts.length === 0 && <p className="card text-slate-300">No thread posts yet.</p>}
       {threadPosts.map((post) => (
-        <PostCard key={post.id} post={post} onVote={handleVote} onReaction={handleReaction} />
+        <PostCard
+          key={post.id}
+          post={post}
+          onVote={handleVote}
+          onReaction={handleReaction}
+          onReport={(postId) => {
+            const reason = window.prompt('Why are you reporting this post?');
+            if (!reason?.trim()) {
+              return Promise.resolve();
+            }
+
+            return handleReport(postId, reason.trim());
+          }}
+        />
       ))}
     </section>
   );
