@@ -66,6 +66,10 @@ export default function OnboardingPage() {
 
       setIsAuthenticated(true);
 
+      const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
+        ? userData.user.user_metadata.primary_team_id
+        : null;
+
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('primary_team_id')
@@ -74,13 +78,13 @@ export default function OnboardingPage() {
 
       if (profileError) {
         setErrorMessage(profileError.message);
-      } else {
-        const profileRow = profile as ProfileRow | null;
-        setCurrentTeamId(profileRow?.primary_team_id ?? null);
-        const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
-        const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
-        setCanOverrideSelection(Boolean(overrideRequested && isAdminFromMetadata));
       }
+
+      const profileRow = profile as ProfileRow | null;
+      setCurrentTeamId(metadataTeam ?? profileRow?.primary_team_id ?? null);
+      const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
+      const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
+      setCanOverrideSelection(Boolean(overrideRequested && isAdminFromMetadata));
 
       setProfileLoading(false);
     };
@@ -113,6 +117,15 @@ export default function OnboardingPage() {
         return;
       }
 
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: { primary_team_id: teamId }
+      });
+
+      if (metadataError) {
+        setErrorMessage(`Could not save your team in your account session. ${metadataError.message}`);
+        return;
+      }
+
       const { data: updatedRows, error: updateError } = await supabase
         .from('profiles')
         .update({ primary_team_id: teamId })
@@ -121,11 +134,9 @@ export default function OnboardingPage() {
         .limit(1);
 
       if (updateError) {
-        setErrorMessage(updateError.message);
-        return;
-      }
-
-      if (!updatedRows || updatedRows.length === 0) {
+        // Do not block navigation when profile table write is restricted/missing.
+        setErrorMessage(`Team selected, but profile sync failed: ${updateError.message}`);
+      } else if (!updatedRows || updatedRows.length === 0) {
         const username = buildUsernameCandidate(userData.user);
         const { error: insertError } = await supabase
           .from('profiles')
@@ -138,8 +149,7 @@ export default function OnboardingPage() {
           .single();
 
         if (insertError) {
-          setErrorMessage(`Could not complete onboarding automatically. ${insertError.message}`);
-          return;
+          setErrorMessage(`Team selected, but profile sync failed: ${insertError.message}`);
         }
       }
 

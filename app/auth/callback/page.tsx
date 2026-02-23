@@ -67,6 +67,15 @@ export default function AuthCallbackPage() {
       }
 
       const requestedPath = getSafeNextPath();
+      const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
+        ? userData.user.user_metadata.primary_team_id
+        : null;
+
+      if (metadataTeam) {
+        router.replace(requestedPath);
+        return;
+      }
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('primary_team_id')

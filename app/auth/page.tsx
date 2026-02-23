@@ -24,11 +24,19 @@ async function getPostLoginPath(supabase: NonNullable<ReturnType<typeof createSu
     return '/auth';
   }
 
+  const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
+    ? userData.user.user_metadata.primary_team_id
+    : null;
+
+  if (metadataTeam) {
+    return requestedPath;
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('primary_team_id')
     .eq('id', userData.user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile?.primary_team_id) {
     return '/onboarding';
