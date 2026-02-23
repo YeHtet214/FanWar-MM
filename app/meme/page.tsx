@@ -51,8 +51,14 @@ async function composeMeme(templateUrl: string, lines: string[]) {
 
   if (activeLines.length > 2) {
     ctx.font = `bold ${Math.max(24, Math.floor(image.width * 0.05))}px Impact, Arial Black, sans-serif`;
-    activeLines.slice(2).forEach((line, index) => {
-      const y = Math.floor(image.height * (0.25 + index * 0.12));
+    const maxExtraLines = 4;
+    const extras = activeLines.slice(2, 2 + maxExtraLines);
+    const startY = Math.floor(image.height * 0.25);
+    const endY = Math.floor(image.height * 0.82);
+    const spacing = extras.length > 1 ? (endY - startY) / (extras.length - 1) : 0;
+
+    extras.forEach((line, index) => {
+      const y = Math.floor(startY + spacing * index);
       ctx.strokeText(line.toUpperCase(), image.width / 2, y);
       ctx.fillText(line.toUpperCase(), image.width / 2, y);
     });
@@ -88,6 +94,8 @@ export default function MemePage() {
     () => memeTemplates.find((template) => template.id === selectedTemplateId) ?? memeTemplates[0],
     [selectedTemplateId]
   );
+
+  const teamsMap = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
 
   useEffect(() => {
     setSlotValues(selectedTemplate?.textSlots.map(() => '') ?? []);
@@ -162,8 +170,12 @@ export default function MemePage() {
       return;
     }
 
-    await navigator.clipboard.writeText(uploadedUrl);
-    setStatus('Link copied. You can now paste it in war room or match post attachments.');
+    try {
+      await navigator.clipboard.writeText(uploadedUrl);
+      setStatus('Link copied. You can now paste it in war room or match post attachments.');
+    } catch (error) {
+      setStatus(`Failed to copy link: ${(error as Error).message || 'Please copy manually.'}`);
+    }
   };
 
   return (
@@ -189,7 +201,11 @@ export default function MemePage() {
               <select className="w-full rounded bg-slate-900 p-2" value={selectedMatchId} onChange={(event) => setSelectedMatchId(event.target.value)}>
                 <option value="">None</option>
                 {matches.map((match) => (
-                  <option key={match.id} value={match.id}>{match.id}</option>
+                  <option key={match.id} value={match.id}>
+                    {teamsMap.get(match.homeTeamId)?.name && teamsMap.get(match.awayTeamId)?.name
+                      ? `${teamsMap.get(match.homeTeamId)?.name} vs ${teamsMap.get(match.awayTeamId)?.name}`
+                      : match.id}
+                  </option>
                 ))}
               </select>
             </label>

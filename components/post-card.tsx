@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { reactionSummary, calculateScore } from '@/lib/domain';
+import { isTrustedMediaUrl } from '@/lib/media';
 import { Post, ReactionType } from '@/lib/types';
 import { useLanguage } from '@/lib/language';
 
@@ -16,6 +17,7 @@ type PostCardProps = {
 
 export function PostCard({ post, onVote, onReaction, onReport }: PostCardProps) {
   const { language, t } = useLanguage();
+  const safeMediaUrl = post.mediaUrl && isTrustedMediaUrl(post.mediaUrl) ? post.mediaUrl : null;
 
   return (
     <article className="card space-y-2">
@@ -24,9 +26,9 @@ export function PostCard({ post, onVote, onReaction, onReport }: PostCardProps) 
         <p className="text-xs text-slate-400">{new Date(post.createdAt).toLocaleString(language === 'my' ? 'my-MM' : 'en-US')}</p>
       </div>
       {post.body && <p>{post.body}</p>}
-      {post.mediaUrl && (
+      {safeMediaUrl && (
         <div className="overflow-hidden rounded border border-slate-700">
-          <Image src={post.mediaUrl} alt="Post attachment" width={720} height={720} className="h-auto w-full object-cover" unoptimized />
+          <Image src={safeMediaUrl} alt="Post attachment" width={720} height={720} className="h-auto w-full object-cover" unoptimized />
         </div>
       )}
       <div className="text-sm text-slate-300">{t('score')}: {calculateScore(post)} ({post.upvotes}↑ {post.downvotes}↓)</div>

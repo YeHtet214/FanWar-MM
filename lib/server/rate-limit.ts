@@ -5,8 +5,17 @@ type Entry = {
 
 const store = new Map<string, Entry>();
 
+function evictExpiredEntries(now: number) {
+  for (const [key, entry] of store.entries()) {
+    if (entry.resetAt <= now) {
+      store.delete(key);
+    }
+  }
+}
+
 export function checkRateLimit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
+  evictExpiredEntries(now);
   const current = store.get(key);
 
   if (!current || current.resetAt <= now) {

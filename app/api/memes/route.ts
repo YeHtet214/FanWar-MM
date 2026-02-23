@@ -16,6 +16,18 @@ function decodeDataUrl(dataUrl: string) {
   };
 }
 
+function resolveFileExtension(mimeType: string) {
+  if (mimeType === 'image/png' || mimeType.startsWith('image/png;')) {
+    return 'png';
+  }
+
+  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg' || mimeType.startsWith('image/jpeg;') || mimeType.startsWith('image/jpg;')) {
+    return 'jpg';
+  }
+
+  throw new Error('Unsupported image type. Use PNG or JPEG.');
+}
+
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const authSupabase = await createSupabaseServerClient();
@@ -32,19 +44,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const payload = await request.json();
-  const { templateId, templateSlug, imageDataUrl, matchId, targetTeamId, caption, textSlots } = payload as {
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch (error) {
+    const parseError = error instanceof Error ? error.message : 'Unknown JSON parse error';
+    return NextResponse.json({ error: `Invalid JSON payload: ${parseError}` }, { status: 400 });
+  }
+
+  const requestData = (payload ?? {}) as {
     templateId?: string;
     templateSlug?: string;
     imageDataUrl?: string;
     matchId?: string;
     targetTeamId?: string;
     caption?: string;
-    textSlots?: string[];
+    textSlots?: unknown;
   };
+
+  const { templateId, templateSlug, imageDataUrl, matchId, targetTeamId, caption } = requestData;
 
   if ((!templateId && !templateSlug) || !imageDataUrl) {
     return NextResponse.json({ error: 'Missing required meme data' }, { status: 400 });
+  }
+
+  let validatedTextSlots: string[] = [];
+  if (requestData.textSlots !== undefined) {
+    if (!Array.isArray(requestData.textSlots)) {
+      return NextResponse.json({ error: 'textSlots must be an array of strings' }, { status: 400 });
+    }
+
+    if (!requestData.textSlots.every((slot) => typeof slot === 'string')) {
+      return NextResponse.json({ error: 'textSlots must contain only strings' }, { status: 400 });
+    }
+
+    validatedTextSlots = requestData.textSlots.map((slot) => slot.trim());
   }
 
   let resolvedTemplateId = templateId;
@@ -83,7 +117,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Caption is too long (max 200 chars)' }, { status: 400 });
   }
 
-  if (textSlots?.some((slot) => slot.length > 80)) {
+  if (validatedTextSlots.some((slot) => slot.length > 80)) {
     return NextResponse.json({ error: 'Each text slot must be 80 characters or less' }, { status: 400 });
   }
 
@@ -98,7 +132,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Image too large (max 4MB)' }, { status: 400 });
   }
 
-  const fileExt = decoded.mimeType.includes('png') ? 'png' : 'jpg';
+  let fileExt: string;
+  try {
+    fileExt = resolveFileExtension(decoded.mimeType);
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+  }
+
   const objectPath = `${creatorId}/${Date.now()}-${resolvedTemplateId}.${fileExt}`;
 
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(objectPath, decoded.buffer, {
@@ -122,13 +162,22 @@ export async function POST(request: Request) {
       template_id: resolvedTemplateId,
       rendered_image_url: renderedImageUrl,
       caption: normalizedCaption || null,
-      overlay_text: textSlots ?? [],
+      overlay_text: validatedTextSlots,
       storage_path: objectPath
     })
     .select('id, rendered_image_url')
     .single();
 
   if (insertError) {
+    const { error: cleanupError } = await supabase.storage.from('generated-memes').remove([objectPath]);
+    if (cleanupError) {
+      console.error('Failed to cleanup orphaned meme object after insert failure', {
+        objectPath,
+        insertError: insertError.message,
+        cleanupError: cleanupError.message
+      });
+    }
+
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
