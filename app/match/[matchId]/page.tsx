@@ -9,6 +9,7 @@ import { getMatchById } from '@/lib/repositories/matches';
 import { getPostsForMatch } from '@/lib/repositories/posts';
 import { getTeams } from '@/lib/repositories/teams';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { MAX_MEDIA_URL_LENGTH, validateMediaUrl } from '@/lib/media';
 import { Match, Post, ReactionType, Team } from '@/lib/types';
 
 const DEMO_USER_ID = 'demo-user-id';
@@ -20,6 +21,8 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
   const [away, setAway] = useState<Team | null>(null);
   const [threadPosts, setThreadPosts] = useState<Post[]>([]);
   const [postText, setPostText] = useState('');
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,14 +97,29 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
 
   const handleCreatePost = async (event: FormEvent) => {
     event.preventDefault();
-    if (!match || !postText.trim()) return;
+    setFormError(null);
+    if (!match) return;
+
+    const trimmedPostText = postText.trim();
+    const trimmedMediaUrl = mediaUrl.trim();
+    if (!trimmedPostText && !trimmedMediaUrl) {
+      setFormError('Please enter post text or a media URL.');
+      return;
+    }
+
+    const mediaValidation = validateMediaUrl(trimmedMediaUrl);
+    if (!mediaValidation.ok) {
+      setFormError(mediaValidation.error ?? 'Invalid media URL');
+      return;
+    }
 
     const optimisticPost: Post = {
       id: `optimistic-${Date.now()}`,
       author: 'You',
       scope: 'match_thread',
       matchId: match.id,
-      body: postText,
+      body: trimmedPostText,
+      mediaUrl: mediaValidation.normalizedUrl || undefined,
       createdAt: new Date().toISOString(),
       upvotes: 0,
       downvotes: 0,
@@ -113,9 +131,10 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
     const previous = threadPosts;
     setThreadPosts((current) => rankFeed([optimisticPost, ...current]));
     setPostText('');
+    setMediaUrl('');
 
     try {
-      await createPostMutation({ body: optimisticPost.body, scope: 'match_thread', matchId: match.id, authorId: DEMO_USER_ID });
+      await createPostMutation({ body: optimisticPost.body, scope: 'match_thread', matchId: match.id, mediaUrl: optimisticPost.mediaUrl, authorId: DEMO_USER_ID });
       const refreshed = await getPostsForMatch(match.id);
       setThreadPosts(rankFeed(refreshed));
     } catch {
@@ -193,7 +212,9 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
         </div>
       )}
       <form className="card space-y-2" onSubmit={handleCreatePost}>
-        <textarea className="w-full rounded bg-slate-900 p-2" value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Comment on the match..." />
+        <textarea className="w-full rounded bg-slate-900 p-2" value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Comment on the match..." maxLength={500} />
+        <input type="url" maxLength={MAX_MEDIA_URL_LENGTH} className="w-full rounded bg-slate-900 p-2 text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Paste meme/image URL (optional)" />
+        {formError && <p className="text-sm text-red-300">{formError}</p>}
         <button type="submit" className="rounded bg-emerald-600 px-3 py-1 text-sm">Post</button>
       </form>
       {!loading && !error && threadPosts.length === 0 && <p className="card text-slate-300">No thread posts yet.</p>}

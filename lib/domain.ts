@@ -27,6 +27,14 @@ export function shouldAutoHide(text: string) {
   return blockedKeywords.some((word) => normalized.includes(word));
 }
 
+export function shouldAutoHideFromMedia(mediaUrl: string) {
+  if (!mediaUrl) {
+    return false;
+  }
+
+  return shouldAutoHide(mediaUrl.toLowerCase());
+}
+
 export function applyStrike(currentStrikes: number) {
   if (currentStrikes >= 2) {
     return 'banned';
