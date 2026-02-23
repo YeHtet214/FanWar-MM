@@ -10,10 +10,10 @@ type SetAllCookies = {
 
 const protectedPrefixes = ['/war-room', '/match', '/meme', '/leaderboard', '/moderation'];
 const profileCacheCookie = 'fw_profile_cache';
+const clientTeamCookieName = 'fw_primary_team_id';
 
 type ProfileCache = {
   primary_team_id: string | null;
-  is_admin: boolean;
   exp: number;
 };
 
@@ -33,7 +33,6 @@ function readProfileCache(rawValue?: string): ProfileCache | null {
     }
     return {
       primary_team_id: parsed.primary_team_id ?? null,
-      is_admin: Boolean(parsed.is_admin),
       exp: parsed.exp
     };
   } catch {
@@ -85,27 +84,27 @@ export async function middleware(request: NextRequest) {
   const metadataTeam = typeof user.user_metadata?.primary_team_id === 'string'
     ? user.user_metadata.primary_team_id
     : null;
-  const metadataIsAdmin = typeof user.user_metadata?.is_admin === 'boolean'
-    ? user.user_metadata.is_admin
-    : null;
+  const metadataRole = user.app_metadata?.role;
+  const metadataRoles = user.app_metadata?.roles;
+  const metadataIsAdmin = user.app_metadata?.is_admin === true
+    || metadataRole === 'admin'
+    || (Array.isArray(metadataRoles) && metadataRoles.includes('admin'));
   const cachedProfile = readProfileCache(request.cookies.get(profileCacheCookie)?.value);
 
+  // Ignore client-provided team cookie for authorization decisions; it's not authoritative.
   let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? null;
-  let isAdmin = metadataIsAdmin ?? cachedProfile?.is_admin ?? null;
 
-  if (primaryTeamId === null || isAdmin === null) {
+  if (primaryTeamId === null) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('primary_team_id, is_admin')
+      .select('primary_team_id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     primaryTeamId = profile?.primary_team_id ?? null;
-    isAdmin = Boolean(profile?.is_admin);
 
     response.cookies.set(profileCacheCookie, JSON.stringify({
       primary_team_id: primaryTeamId,
-      is_admin: isAdmin,
       exp: Date.now() + (5 * 60 * 1000)
     }), {
       httpOnly: true,
@@ -115,8 +114,15 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  if (!primaryTeamId && request.cookies.get(clientTeamCookieName)) {
+    response.cookies.set(clientTeamCookieName, '', {
+      path: '/',
+      expires: new Date(0)
+    });
+  }
+
   const hasTeam = Boolean(primaryTeamId);
-  const hasAdminAccess = Boolean(isAdmin);
+  const hasAdminAccess = Boolean(metadataIsAdmin);
 
   if (isAdminOverride && !hasAdminAccess) {
     if (!hasTeam) {

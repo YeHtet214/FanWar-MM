@@ -11,3 +11,15 @@ export function isModeratorUser(user: User) {
     || (Array.isArray(appRoles) && appRoles.includes('moderator'))
   );
 }
+
+export function isAdminUser(user: User) {
+  const appRole = user.app_metadata?.role;
+  const appRoles = user.app_metadata?.roles;
+  const appIsAdmin = user.app_metadata?.is_admin;
+
+  return (
+    appRole === 'admin'
+    || appIsAdmin === true
+    || (Array.isArray(appRoles) && appRoles.includes('admin'))
+  );
+}

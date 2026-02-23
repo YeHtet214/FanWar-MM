@@ -8,7 +8,7 @@ import { useLanguage } from '@/lib/language';
 import { reactPostMutation, votePostMutation, createPostMutation, submitReportMutation } from '@/lib/repositories/post-mutations';
 import { getPostsForTeam } from '@/lib/repositories/posts';
 import { getTeams } from '@/lib/repositories/teams';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { MAX_MEDIA_URL_LENGTH, validateMediaUrl } from '@/lib/media';
 import { Post, ReactionType, Team } from '@/lib/types';
 
@@ -33,7 +33,7 @@ export default function WarRoomPage() {
   }, [data]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createBrowserSupabaseClient();
     if (!supabase) {
       return;
     }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { applyStrike } from '@/lib/domain';
 import { useLanguage } from '@/lib/language';
 import { reviewReportMutation } from '@/lib/repositories/post-mutations';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 type QueueItem = {
   id: string;
@@ -52,7 +52,7 @@ export default function ModerationPage() {
 
   useEffect(() => {
     const loadCurrentModerator = async () => {
-      const supabase = createSupabaseBrowserClient();
+      const supabase = createBrowserSupabaseClient();
       if (!supabase) {
         return;
       }
