@@ -24,11 +24,19 @@ async function getPostLoginPath(supabase: NonNullable<ReturnType<typeof createSu
     return '/auth';
   }
 
+  const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
+    ? userData.user.user_metadata.primary_team_id
+    : null;
+
+  if (metadataTeam) {
+    return requestedPath;
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('primary_team_id')
     .eq('id', userData.user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile?.primary_team_id) {
     return '/onboarding';
@@ -152,6 +160,10 @@ export default function AuthPage() {
       <h1 className="text-2xl font-bold">Sign in or create account</h1>
       <p className="text-slate-300">
         Use your email to receive a magic link. New users will be created automatically by Supabase Auth.
+      </p>
+
+      <p className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300">
+        Important: open the magic link in the same browser and device where you requested it.
       </p>
 
       <form className="card space-y-3" onSubmit={handleSendMagicLink}>

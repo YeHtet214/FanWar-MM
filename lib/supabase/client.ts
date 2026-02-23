@@ -6,6 +6,12 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 let browserSupabaseClient: SupabaseClient | null = null;
 
+const noOpBrowserLock = async <T>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<T>
+): Promise<T> => fn();
+
 export function createBrowserSupabaseClient() {
   if (!supabaseUrl || !supabaseAnonKey) {
     return null;
@@ -15,7 +21,11 @@ export function createBrowserSupabaseClient() {
     return browserSupabaseClient;
   }
 
-  browserSupabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  browserSupabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      lock: noOpBrowserLock
+    }
+  });
   return browserSupabaseClient;
 }
 

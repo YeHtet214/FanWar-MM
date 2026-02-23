@@ -7,14 +7,32 @@ import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useLanguage } from '@/lib/language';
 import { getTeams } from '@/lib/repositories/teams';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { User } from '@supabase/supabase-js';
 import { Team } from '@/lib/types';
 
 type ProfileRow = {
   primary_team_id: string | null;
-  is_admin: boolean | null;
 };
 
 const allowedNextPrefixes = ['/war-room', '/match/', '/meme', '/leaderboard', '/moderation'];
+
+
+function buildUsernameCandidate(user: User) {
+  const email = user.email?.split('@')[0] ?? 'fan';
+  const sanitized = email.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 18) || 'fan';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${sanitized}_${suffix}`;
+}
+
+
+function getClientTeamCookie() {
+  const match = document.cookie.match(/(?:^|; )fw_primary_team_id=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setClientTeamCookie(teamId: string) {
+  document.cookie = `fw_primary_team_id=${encodeURIComponent(teamId)}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+}
 
 function getSafeNextPath() {
   const nextPath = new URLSearchParams(window.location.search).get('next');
@@ -58,20 +76,25 @@ export default function OnboardingPage() {
 
       setIsAuthenticated(true);
 
+      const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
+        ? userData.user.user_metadata.primary_team_id
+        : null;
+
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('primary_team_id, is_admin')
+        .select('primary_team_id')
         .eq('id', userData.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
         setErrorMessage(profileError.message);
-      } else {
-        const profileRow = profile as ProfileRow;
-        setCurrentTeamId(profileRow.primary_team_id);
-        const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
-        setCanOverrideSelection(Boolean(overrideRequested && profileRow.is_admin));
       }
+
+      const profileRow = profile as ProfileRow | null;
+      setCurrentTeamId(metadataTeam ?? profileRow?.primary_team_id ?? getClientTeamCookie());
+      const overrideRequested = new URLSearchParams(window.location.search).get('adminOverride') === '1';
+      const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
+      setCanOverrideSelection(Boolean(overrideRequested && isAdminFromMetadata));
 
       setProfileLoading(false);
     };
@@ -104,14 +127,43 @@ export default function OnboardingPage() {
         return;
       }
 
-      const { error: updateError } = await supabase
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: { primary_team_id: teamId }
+      });
+
+      if (metadataError) {
+        setErrorMessage(`Could not save your team in your account session. ${metadataError.message}`);
+        return;
+      }
+
+      setClientTeamCookie(teamId);
+      await supabase.auth.refreshSession();
+
+      const { data: updatedRows, error: updateError } = await supabase
         .from('profiles')
         .update({ primary_team_id: teamId })
-        .eq('id', userData.user.id);
+        .eq('id', userData.user.id)
+        .select('id')
+        .limit(1);
 
       if (updateError) {
-        setErrorMessage(updateError.message);
-        return;
+        // Do not block navigation when profile table write is restricted/missing.
+        setErrorMessage(`Team selected, but profile sync failed: ${updateError.message}`);
+      } else if (!updatedRows || updatedRows.length === 0) {
+        const username = buildUsernameCandidate(userData.user);
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: userData.user.id,
+            username,
+            primary_team_id: teamId
+          }, { onConflict: 'id' })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          setErrorMessage(`Team selected, but profile sync failed: ${insertError.message}`);
+        }
       }
 
       setCurrentTeamId(teamId);
@@ -137,6 +189,29 @@ export default function OnboardingPage() {
 
       {errorMessage ? (
         <div className="card border border-red-600 bg-red-950/30 text-red-200">{errorMessage}</div>
+      ) : null}
+
+
+      {currentTeamId ? (
+        <div className="card border border-sky-700 bg-sky-950/30 text-sky-100">
+          <p className="mb-3">Your team has been locked. Continue to start participating.</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-md bg-red-600 px-3 py-1 text-sm"
+              onClick={() => router.push('/war-room')}
+              type="button"
+            >
+              Go to War Room
+            </button>
+            <button
+              className="rounded-md border border-slate-500 px-3 py-1 text-sm"
+              onClick={() => router.push('/leaderboard')}
+              type="button"
+            >
+              View Leaderboard
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {teamsLoading && <p className="card text-slate-300">Loading teams...</p>}
