@@ -2,8 +2,6 @@ import { teams as fallbackTeams } from '@/lib/data';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { Team } from '@/lib/types';
 
-let supabaseClient: ReturnType<typeof createBrowserSupabaseClient> | null | undefined;
-
 type TeamRow = {
   id: string;
   name: string;
@@ -11,19 +9,19 @@ type TeamRow = {
   crest_url: string | null;
 };
 
-async function getSupabaseClient() {
-  if (supabaseClient !== undefined) {
-    return supabaseClient;
-  }
+let browserSupabaseClient: ReturnType<typeof createBrowserSupabaseClient> | undefined;
 
+async function getSupabaseClient() {
   if (typeof window === 'undefined') {
     const { createServerSupabaseClient } = await import('@/lib/supabase/server');
-    supabaseClient = createServerSupabaseClient();
-    return supabaseClient;
+    return createServerSupabaseClient();
   }
 
-  supabaseClient = createBrowserSupabaseClient();
-  return supabaseClient;
+  if (browserSupabaseClient === undefined) {
+    browserSupabaseClient = createBrowserSupabaseClient();
+  }
+
+  return browserSupabaseClient;
 }
 
 function mapTeam(row: TeamRow): Team {

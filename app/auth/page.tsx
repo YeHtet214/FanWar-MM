@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthChangeEvent } from '@supabase/supabase-js';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 const allowedNextPrefixes = ['/', '/onboarding', '/war-room', '/match/', '/meme', '/leaderboard', '/moderation', '/admin/team-override'];
 const defaultCooldownSeconds = 60;
@@ -25,7 +25,7 @@ type PostLoginStatus = {
 };
 
 async function getPostLoginStatus(
-  supabase: NonNullable<ReturnType<typeof createSupabaseBrowserClient>>,
+  supabase: NonNullable<ReturnType<typeof createBrowserSupabaseClient>>,
   requestedPath: string
 ): Promise<PostLoginStatus> {
   const { data: userData } = await supabase.auth.getUser();
@@ -56,7 +56,7 @@ async function getPostLoginStatus(
 
 export default function AuthPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -91,9 +91,15 @@ export default function AuthPage() {
       return;
     }
 
+    let cancelled = false;
+
     const checkSession = async () => {
       const requestedPath = getSafeNextPath();
       const status = await getPostLoginStatus(client, requestedPath);
+      if (cancelled) {
+        return;
+      }
+
       setNeedsOnboarding(status.needsOnboarding);
       if (status.isAuthenticated && !status.needsOnboarding && status.path !== '/auth') {
         router.replace(status.path);
@@ -106,6 +112,10 @@ export default function AuthPage() {
       if (event === 'SIGNED_IN') {
         const requestedPath = getSafeNextPath();
         const status = await getPostLoginStatus(client, requestedPath);
+        if (cancelled) {
+          return;
+        }
+
         setNeedsOnboarding(status.needsOnboarding);
         if (!status.needsOnboarding && status.path !== '/auth') {
           router.replace(status.path);
@@ -116,6 +126,7 @@ export default function AuthPage() {
     checkSession();
 
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
     };
   }, [router, supabase]);
@@ -178,9 +189,8 @@ export default function AuthPage() {
         Important: open the magic link in the same browser and device where you requested it.
       </p>
 
-
       {needsOnboarding ? (
-        <div className="card border border-amber-700 bg-amber-950/30 text-amber-100 space-y-2">
+        <div className="card space-y-2 border border-amber-700 bg-amber-950/30 text-amber-100">
           <p>You are signed in, but your team selection is incomplete.</p>
           <div className="flex gap-2">
             <button
@@ -193,7 +203,9 @@ export default function AuthPage() {
             <button
               className="rounded-md border border-slate-500 px-3 py-1 text-sm"
               onClick={async () => {
-                if (!supabase) return;
+                if (!supabase) {
+                  return;
+                }
                 await supabase.auth.signOut();
                 setNeedsOnboarding(false);
               }}

@@ -8,7 +8,7 @@ import { createPostMutation, reactPostMutation, submitReportMutation, votePostMu
 import { getMatchById } from '@/lib/repositories/matches';
 import { getPostsForMatch } from '@/lib/repositories/posts';
 import { getTeams } from '@/lib/repositories/teams';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { MAX_MEDIA_URL_LENGTH, validateMediaUrl } from '@/lib/media';
 import { Match, Post, ReactionType, Team } from '@/lib/types';
 
@@ -77,7 +77,7 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
   }, [params.matchId]);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createBrowserSupabaseClient();
     if (!supabase || !match) {
       return;
     }

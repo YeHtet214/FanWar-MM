@@ -1,52 +1,33 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { teams } from '@/lib/data';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function TeamOverridePage() {
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [targetUserId, setTargetUserId] = useState('');
   const [teamId, setTeamId] = useState(teams[0]?.id ?? '');
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const applyOverride = async () => {
-    if (!supabase) {
-      setStatus('Supabase is not configured.');
-      return;
-    }
-
     setSaving(true);
     setStatus(null);
 
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        setStatus('You must be signed in as an admin.');
-        return;
-      }
+      const response = await fetch('/api/admin/team-override', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          targetUserId: targetUserId.trim(),
+          teamId
+        })
+      });
 
-      const isAdminFromMetadata = userData.user.user_metadata?.is_admin === true;
-
-      if (!isAdminFromMetadata) {
-        setStatus('Admin access is required for overrides.');
-        return;
-      }
-
-      const { data: updatedRows, error: updateError } = await supabase
-        .from('profiles')
-        .update({ primary_team_id: teamId })
-        .eq('id', targetUserId.trim())
-        .select('id');
-
-      if (updateError) {
-        setStatus(updateError.message);
-        return;
-      }
-
-      if (!updatedRows || updatedRows.length === 0) {
-        setStatus('No user found or no rows updated for that user id.');
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setStatus(payload.error ?? 'Failed to apply override.');
         return;
       }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 const allowedNextPrefixes = ['/', '/onboarding', '/war-room', '/match/', '/meme', '/leaderboard', '/moderation', '/admin/team-override'];
 
@@ -22,7 +22,7 @@ type ProfileRow = {
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showRetryHint, setShowRetryHint] = useState(false);
 
@@ -48,55 +48,55 @@ export default function AuthCallbackPage() {
           return;
         }
 
-      if (tokenHash && otpType) {
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: otpType === 'recovery' ? 'recovery' : 'email'
-        });
+        if (tokenHash && otpType) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: otpType === 'recovery' ? 'recovery' : 'email'
+          });
 
-        if (error) {
-          setErrorMessage(error.message);
-          return;
-        }
-      } else if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          if (/PKCE code verifier not found/i.test(error.message)) {
-            setErrorMessage('Your sign-in link expired or was opened in a different browser. Please request a new magic link and open it in the same browser you used to submit your email.');
+          if (error) {
+            setErrorMessage(error.message);
             return;
           }
+        } else if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            if (/PKCE code verifier not found/i.test(error.message)) {
+              setErrorMessage('Your sign-in link expired or was opened in a different browser. Please request a new magic link and open it in the same browser you used to submit your email.');
+              return;
+            }
 
-          setErrorMessage(error.message);
+            setErrorMessage(error.message);
+            return;
+          }
+        }
+
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) {
+          setErrorMessage('Authentication failed. Please request a new magic link.');
           return;
         }
-      }
 
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        setErrorMessage('Authentication failed. Please request a new magic link.');
-        return;
-      }
+        const requestedPath = getSafeNextPath();
+        const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
+          ? userData.user.user_metadata.primary_team_id
+          : null;
 
-      const requestedPath = getSafeNextPath();
-      const metadataTeam = typeof userData.user.user_metadata?.primary_team_id === 'string'
-        ? userData.user.user_metadata.primary_team_id
-        : null;
+        if (metadataTeam) {
+          router.replace(requestedPath);
+          return;
+        }
 
-      if (metadataTeam) {
-        router.replace(requestedPath);
-        return;
-      }
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('primary_team_id')
+          .eq('id', userData.user.id)
+          .maybeSingle();
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('primary_team_id')
-        .eq('id', userData.user.id)
-        .maybeSingle();
-
-      if (!profile || !(profile as ProfileRow).primary_team_id) {
-        router.replace('/onboarding');
-        return;
-      }
+        if (!profile || !(profile as ProfileRow).primary_team_id) {
+          router.replace('/onboarding');
+          return;
+        }
 
         router.replace(requestedPath);
       } catch (error) {

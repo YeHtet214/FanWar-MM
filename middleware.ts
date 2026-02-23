@@ -84,14 +84,15 @@ export async function middleware(request: NextRequest) {
   const metadataTeam = typeof user.user_metadata?.primary_team_id === 'string'
     ? user.user_metadata.primary_team_id
     : null;
-  const metadataIsAdmin = typeof user.user_metadata?.is_admin === 'boolean'
-    ? user.user_metadata.is_admin
-    : null;
+  const metadataRole = user.app_metadata?.role;
+  const metadataRoles = user.app_metadata?.roles;
+  const metadataIsAdmin = user.app_metadata?.is_admin === true
+    || metadataRole === 'admin'
+    || (Array.isArray(metadataRoles) && metadataRoles.includes('admin'));
   const cachedProfile = readProfileCache(request.cookies.get(profileCacheCookie)?.value);
 
-  const cookieTeam = request.cookies.get(clientTeamCookieName)?.value ?? null;
-  let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? cookieTeam ?? null;
-  let isAdmin = metadataIsAdmin;
+  // Ignore client-provided team cookie for authorization decisions; it's not authoritative.
+  let primaryTeamId: string | null = metadataTeam ?? cachedProfile?.primary_team_id ?? null;
 
   if (primaryTeamId === null) {
     const { data: profile } = await supabase
@@ -113,8 +114,15 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  if (!primaryTeamId && request.cookies.get(clientTeamCookieName)) {
+    response.cookies.set(clientTeamCookieName, '', {
+      path: '/',
+      expires: new Date(0)
+    });
+  }
+
   const hasTeam = Boolean(primaryTeamId);
-  const hasAdminAccess = Boolean(isAdmin);
+  const hasAdminAccess = Boolean(metadataIsAdmin);
 
   if (isAdminOverride && !hasAdminAccess) {
     if (!hasTeam) {
