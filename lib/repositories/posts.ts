@@ -12,6 +12,7 @@ type PostRow = {
   team_id: string | null;
   match_id: string | null;
   body: string | null;
+  media_url: string | null;
   upvotes: number;
   downvotes: number;
   is_hidden: boolean;
@@ -66,6 +67,7 @@ function mapPost(row: PostRow): Post {
     teamId: row.team_id ?? undefined,
     matchId: row.match_id ?? undefined,
     body: row.body ?? '',
+    mediaUrl: row.media_url ?? undefined,
     createdAt: row.created_at,
     upvotes: row.upvotes,
     downvotes: row.downvotes,
@@ -76,7 +78,7 @@ function mapPost(row: PostRow): Post {
   };
 }
 
-const postSelect = 'id, scope, team_id, match_id, body, upvotes, downvotes, is_hidden, report_count, strike_linked_profile_id, created_at, profiles:author_id(username), post_reactions(reaction)';
+const postSelect = 'id, scope, team_id, match_id, body, media_url, upvotes, downvotes, is_hidden, report_count, strike_linked_profile_id, created_at, profiles:author_id(username), post_reactions(reaction)';
 
 export async function getPosts(): Promise<Post[]> {
   const supabase = await getSupabaseClient();

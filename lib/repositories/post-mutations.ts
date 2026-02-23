@@ -6,6 +6,7 @@ export async function createPostMutation(input: {
   teamId?: string;
   matchId?: string;
   authorId: string;
+  mediaUrl?: string;
 }) {
   const response = await fetch('/api/posts', {
     method: 'POST',

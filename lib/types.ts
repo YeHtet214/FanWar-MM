@@ -27,6 +27,7 @@ export type Post = {
   matchId?: string;
   scope: PostScope;
   body: string;
+  mediaUrl?: string;
   createdAt: string;
   upvotes: number;
   downvotes: number;

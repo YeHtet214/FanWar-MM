@@ -17,6 +17,7 @@ const DEMO_USER_ID = 'demo-user-id';
 export default function WarRoomPage() {
   const { t } = useLanguage();
   const [postText, setPostText] = useState('');
+  const [mediaUrl, setMediaUrl] = useState('');
   const [postsState, setPostsState] = useState<Post[]>([]);
   const { data, loading, error } = useAsyncData<[Team[], Post[]]>(
     async () => Promise.all([getTeams(), getPostsForTeam(DEFAULT_TEAM_ID)]),
@@ -61,6 +62,7 @@ export default function WarRoomPage() {
       scope: 'team_room',
       teamId: DEFAULT_TEAM_ID,
       body: postText,
+      mediaUrl: mediaUrl.trim() || undefined,
       createdAt: new Date().toISOString(),
       upvotes: 0,
       downvotes: 0,
@@ -72,9 +74,10 @@ export default function WarRoomPage() {
     const previous = postsState;
     setPostsState((current) => rankFeed([optimisticPost, ...current]));
     setPostText('');
+    setMediaUrl('');
 
     try {
-      await createPostMutation({ body: optimisticPost.body, scope: 'team_room', teamId: DEFAULT_TEAM_ID, authorId: DEMO_USER_ID });
+      await createPostMutation({ body: optimisticPost.body, scope: 'team_room', teamId: DEFAULT_TEAM_ID, mediaUrl: optimisticPost.mediaUrl, authorId: DEMO_USER_ID });
       const refreshed = await getPostsForTeam(DEFAULT_TEAM_ID);
       setPostsState(rankFeed(refreshed));
     } catch {
@@ -145,7 +148,8 @@ export default function WarRoomPage() {
       )}
       <p className="text-slate-300">{t('warRoomFeed')}</p>
       <form className="card space-y-2" onSubmit={handleCreatePost}>
-        <textarea className="w-full rounded bg-slate-900 p-2" value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Drop your banter..." />
+        <textarea className="w-full rounded bg-slate-900 p-2" value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Drop your banter..." maxLength={500} />
+        <input className="w-full rounded bg-slate-900 p-2 text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Paste meme/image URL (optional)" />
         <button type="submit" className="rounded bg-emerald-600 px-3 py-1 text-sm">Post</button>
       </form>
       {loading && <p className="card text-slate-300">Loading posts...</p>}

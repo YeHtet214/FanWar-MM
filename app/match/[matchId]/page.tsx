@@ -20,6 +20,7 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
   const [away, setAway] = useState<Team | null>(null);
   const [threadPosts, setThreadPosts] = useState<Post[]>([]);
   const [postText, setPostText] = useState('');
+  const [mediaUrl, setMediaUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +103,7 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
       scope: 'match_thread',
       matchId: match.id,
       body: postText,
+      mediaUrl: mediaUrl.trim() || undefined,
       createdAt: new Date().toISOString(),
       upvotes: 0,
       downvotes: 0,
@@ -113,9 +115,10 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
     const previous = threadPosts;
     setThreadPosts((current) => rankFeed([optimisticPost, ...current]));
     setPostText('');
+    setMediaUrl('');
 
     try {
-      await createPostMutation({ body: optimisticPost.body, scope: 'match_thread', matchId: match.id, authorId: DEMO_USER_ID });
+      await createPostMutation({ body: optimisticPost.body, scope: 'match_thread', matchId: match.id, mediaUrl: optimisticPost.mediaUrl, authorId: DEMO_USER_ID });
       const refreshed = await getPostsForMatch(match.id);
       setThreadPosts(rankFeed(refreshed));
     } catch {
@@ -193,7 +196,8 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
         </div>
       )}
       <form className="card space-y-2" onSubmit={handleCreatePost}>
-        <textarea className="w-full rounded bg-slate-900 p-2" value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Comment on the match..." />
+        <textarea className="w-full rounded bg-slate-900 p-2" value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="Comment on the match..." maxLength={500} />
+        <input className="w-full rounded bg-slate-900 p-2 text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Paste meme/image URL (optional)" />
         <button type="submit" className="rounded bg-emerald-600 px-3 py-1 text-sm">Post</button>
       </form>
       {!loading && !error && threadPosts.length === 0 && <p className="card text-slate-300">No thread posts yet.</p>}

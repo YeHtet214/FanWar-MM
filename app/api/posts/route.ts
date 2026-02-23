@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { shouldAutoHide } from '@/lib/domain';
 import { createServerSupabaseClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { getProfileModerationState, isPostingBlocked } from '@/lib/server/moderation';
+import { checkRateLimit } from '@/lib/server/rate-limit';
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
@@ -20,19 +21,30 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json();
-  const { body, scope, teamId, matchId, autoHidden } = payload as {
+  const { body, scope, teamId, matchId, autoHidden, mediaUrl } = payload as {
     body?: string;
     scope?: 'team_room' | 'match_thread';
     teamId?: string;
     matchId?: string;
     autoHidden?: boolean;
+    mediaUrl?: string;
   };
 
-  if (!body || !scope) {
+  if (!scope || (!body && !mediaUrl)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
   const authorId = userData.user.id;
+
+  const trimmedBody = body?.trim() ?? '';
+  if (trimmedBody.length > 500) {
+    return NextResponse.json({ error: 'Post text is too long (max 500 chars)' }, { status: 400 });
+  }
+
+  const limiter = checkRateLimit(`post:${authorId}`, 6, 60_000);
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: 'Too many posts, please slow down' }, { status: 429 });
+  }
 
   try {
     const profile = await getProfileModerationState(supabase, authorId);
@@ -47,7 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 
-  const serverHidden = shouldAutoHide(body);
+  const serverHidden = shouldAutoHide(trimmedBody);
   const hiddenByKeyword = serverHidden || Boolean(autoHidden);
 
   const { data, error } = await supabase
@@ -57,7 +69,8 @@ export async function POST(request: Request) {
       scope,
       team_id: scope === 'team_room' ? teamId ?? null : null,
       match_id: scope === 'match_thread' ? matchId ?? null : null,
-      body,
+      body: trimmedBody || null,
+      media_url: mediaUrl ?? null,
       is_hidden: hiddenByKeyword,
       hidden_reason: hiddenByKeyword ? 'keyword_filter' : null,
       report_count: 0,
