@@ -32,7 +32,7 @@ export function PostCard({ post, onVote, onReaction, onReport }: PostCardProps) 
             {reaction}
           </button>
         ))}
-        <button className="rounded bg-red-900/60 px-2 py-1 text-xs" onClick={() => onReport?.(post.id)}>Report</button>
+        <button className="rounded bg-red-900/60 px-2 py-1 text-xs" onClick={() => onReport?.(post.id)}>{t('report')}</button>
       </div>
       <div className="text-xs text-slate-400">{reactionSummary(post.reactions) || t('noReactionsYet')}</div>
     </article>

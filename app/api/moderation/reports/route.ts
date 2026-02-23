@@ -1,10 +1,38 @@
 import { NextResponse } from 'next/server';
 import { applyStrike } from '@/lib/domain';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createSupabaseServerClient } from '@/lib/supabase/server';
+import { isModeratorUser } from '@/lib/server/auth';
 
 type ReviewDecision = 'confirmed' | 'dismissed';
 
+async function requireModerator() {
+  const authSupabase = await createSupabaseServerClient();
+  if (!authSupabase) {
+    return { error: NextResponse.json({ error: 'Supabase is not configured' }, { status: 500 }) };
+  }
+
+  const { data: userData, error: userError } = await authSupabase.auth.getUser();
+  if (userError) {
+    return { error: NextResponse.json({ error: userError.message }, { status: 500 }) };
+  }
+
+  if (!userData.user) {
+    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  if (!isModeratorUser(userData.user)) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  return { userId: userData.user.id };
+}
+
 export async function GET() {
+  const auth = await requireModerator();
+  if (auth.error) {
+    return auth.error;
+  }
+
   const supabase = createServerSupabaseClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Supabase is not configured' }, { status: 500 });
@@ -27,19 +55,24 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireModerator();
+  if (auth.error) {
+    return auth.error;
+  }
+
   const supabase = createServerSupabaseClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Supabase is not configured' }, { status: 500 });
   }
 
-  const { reportId, reviewerId, decision, notes } = (await request.json()) as {
+  const reviewerId = auth.userId;
+  const { reportId, decision, notes } = (await request.json()) as {
     reportId?: string;
-    reviewerId?: string;
     decision?: ReviewDecision;
     notes?: string;
   };
 
-  if (!reportId || !reviewerId || (decision !== 'confirmed' && decision !== 'dismissed')) {
+  if (!reportId || (decision !== 'confirmed' && decision !== 'dismissed')) {
     return NextResponse.json({ error: 'Invalid review payload' }, { status: 400 });
   }
 
@@ -49,8 +82,16 @@ export async function POST(request: Request) {
     .eq('id', reportId)
     .maybeSingle();
 
-  if (reportError || !report) {
-    return NextResponse.json({ error: reportError?.message ?? 'Report not found' }, { status: 404 });
+  if (reportError) {
+    return NextResponse.json({ error: reportError.message }, { status: 500 });
+  }
+
+  if (!report) {
+    return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+  }
+
+  if (report.status === 'resolved' || report.status === 'dismissed') {
+    return NextResponse.json({ error: 'Report has already been reviewed' }, { status: 409 });
   }
 
   const resolvedStatus = decision === 'confirmed' ? 'resolved' : 'dismissed';
@@ -77,51 +118,43 @@ export async function POST(request: Request) {
   if (decision === 'confirmed') {
     const reportPost = report.posts as { author_id?: string } | Array<{ author_id?: string }> | null;
     const authorId = Array.isArray(reportPost) ? reportPost[0]?.author_id : reportPost?.author_id;
-    if (authorId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, strike_count')
-        .eq('id', authorId)
-        .maybeSingle();
 
-      if (profileError || !profile) {
-        return NextResponse.json({ error: profileError?.message ?? 'Profile not found' }, { status: 500 });
-      }
+    if (!authorId) {
+      return NextResponse.json({ error: 'Unable to resolve target profile for report' }, { status: 500 });
+    }
 
-      strikeCount = profile.strike_count + 1;
-      nextState = applyStrike(profile.strike_count);
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, strike_count')
+      .eq('id', authorId)
+      .maybeSingle();
 
-      const { error: profileUpdateError } = await supabase
-        .from('profiles')
-        .update({ strike_count: strikeCount, moderation_state: nextState })
-        .eq('id', authorId);
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
 
-      if (profileUpdateError) {
-        return NextResponse.json({ error: profileUpdateError.message }, { status: 500 });
-      }
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
 
-      const { error: postUpdateError } = await supabase
-        .from('posts')
-        .update({ is_hidden: true, strike_linked_profile_id: authorId, hidden_reason: 'confirmed_violation' })
-        .eq('id', report.post_id);
+    strikeCount = profile.strike_count + 1;
+    nextState = applyStrike(profile.strike_count);
 
-      if (postUpdateError) {
-        return NextResponse.json({ error: postUpdateError.message }, { status: 500 });
-      }
+    const { error: processError } = await supabase.rpc('process_moderation_confirmed', {
+      report_id_input: report.id,
+      post_id_input: report.post_id,
+      reviewer_id_input: reviewerId,
+      target_profile_id_input: authorId,
+      moderation_action_input: nextState,
+      strike_count_after_input: strikeCount,
+      notes_input: notes?.trim() || null
+    });
 
-      await supabase.from('moderation_reviews').insert({
-        report_id: report.id,
-        post_id: report.post_id,
-        reviewer_id: reviewerId,
-        target_profile_id: authorId,
-        decision,
-        moderation_action: nextState,
-        strike_count_after: strikeCount,
-        notes: notes?.trim() || null
-      });
+    if (processError) {
+      return NextResponse.json({ error: processError.message }, { status: 500 });
     }
   } else {
-    await supabase.from('moderation_reviews').insert({
+    const { error: insertError } = await supabase.from('moderation_reviews').insert({
       report_id: report.id,
       post_id: report.post_id,
       reviewer_id: reviewerId,
@@ -131,6 +164,10 @@ export async function POST(request: Request) {
       strike_count_after: null,
       notes: notes?.trim() || null
     });
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true, decision, moderationState: nextState, strikeCount });

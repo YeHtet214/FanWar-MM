@@ -121,12 +121,18 @@ export default function WarRoomPage() {
   };
 
   const handleReport = async (postId: string) => {
+    const reason = window.prompt('Why are you reporting this post?');
+    if (!reason?.trim()) {
+      return;
+    }
+
     try {
-      await submitReportMutation(postId, { reporterId: DEMO_USER_ID, reason: 'Community report' });
+      await submitReportMutation(postId, { reason: reason.trim() });
       const refreshed = await getPostsForTeam(DEFAULT_TEAM_ID);
       setPostsState(rankFeed(refreshed));
-    } catch {
-      // ignore demo flow errors
+    } catch (error) {
+      console.error('Failed to submit report', { error, postId, reporterId: DEMO_USER_ID });
+      window.alert('Failed to submit report. Please try again.');
     }
   };
 

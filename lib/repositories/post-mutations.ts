@@ -1,4 +1,3 @@
-import { shouldAutoHide } from '@/lib/domain';
 import { PostScope, ReactionType } from '@/lib/types';
 
 export async function createPostMutation(input: {
@@ -11,10 +10,7 @@ export async function createPostMutation(input: {
   const response = await fetch('/api/posts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...input,
-      autoHidden: shouldAutoHide(input.body)
-    })
+    body: JSON.stringify(input)
   });
 
   if (!response.ok) {
@@ -52,7 +48,7 @@ export async function reactPostMutation(postId: string, input: { userId: string;
   return response.json();
 }
 
-export async function submitReportMutation(postId: string, input: { reporterId: string; reason: string }) {
+export async function submitReportMutation(postId: string, input: { reason: string }) {
   const response = await fetch(`/api/posts/${postId}/report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -68,7 +64,6 @@ export async function submitReportMutation(postId: string, input: { reporterId: 
 
 export async function reviewReportMutation(input: {
   reportId: string;
-  reviewerId: string;
   decision: 'confirmed' | 'dismissed';
   notes?: string;
 }) {

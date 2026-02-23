@@ -161,17 +161,18 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
     }
   };
 
-  const handleReport = async (postId: string) => {
+  const handleReport = async (postId: string, reason: string) => {
     if (!match) {
       return;
     }
 
     try {
-      await submitReportMutation(postId, { reporterId: DEMO_USER_ID, reason: 'Community report' });
+      await submitReportMutation(postId, { reason });
       const refreshed = await getPostsForMatch(match.id);
       setThreadPosts(rankFeed(refreshed));
-    } catch {
-      // ignore demo flow errors
+    } catch (e) {
+      console.error('Failed to submit match-thread report', { e, postId, reporterId: DEMO_USER_ID });
+      window.alert('Failed to submit report. Please try again.');
     }
   };
 
@@ -197,7 +198,20 @@ export default function MatchThreadPage({ params }: { params: { matchId: string 
       </form>
       {!loading && !error && threadPosts.length === 0 && <p className="card text-slate-300">No thread posts yet.</p>}
       {threadPosts.map((post) => (
-        <PostCard key={post.id} post={post} onVote={handleVote} onReaction={handleReaction} onReport={handleReport} />
+        <PostCard
+          key={post.id}
+          post={post}
+          onVote={handleVote}
+          onReaction={handleReaction}
+          onReport={(postId) => {
+            const reason = window.prompt('Why are you reporting this post?');
+            if (!reason?.trim()) {
+              return Promise.resolve();
+            }
+
+            return handleReport(postId, reason.trim());
+          }}
+        />
       ))}
     </section>
   );

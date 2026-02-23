@@ -1,25 +1,36 @@
 import { NextResponse } from 'next/server';
 import { ReactionType } from '@/lib/types';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { getProfileModerationState, isPostingBlocked } from '@/lib/server/moderation';
 
 const reactionTypes: ReactionType[] = ['clown', 'fire', 'bottle', 'salty', 'laugh'];
 
 export async function POST(request: Request, { params }: { params: { postId: string } }) {
   const supabase = createServerSupabaseClient();
-  if (!supabase) {
+  const authSupabase = await createSupabaseServerClient();
+  if (!supabase || !authSupabase) {
     return NextResponse.json({ error: 'Supabase is not configured' }, { status: 500 });
   }
 
-  const { userId, reaction, action } = (await request.json()) as {
-    userId?: string;
+  const { data: userData, error: userError } = await authSupabase.auth.getUser();
+  if (userError) {
+    return NextResponse.json({ error: userError.message }, { status: 500 });
+  }
+
+  if (!userData.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { reaction, action } = (await request.json()) as {
     reaction?: ReactionType;
     action?: 'add' | 'remove';
   };
 
-  if (!userId || !reaction || !action || !reactionTypes.includes(reaction)) {
+  if (!reaction || !action || !reactionTypes.includes(reaction)) {
     return NextResponse.json({ error: 'Invalid reaction payload' }, { status: 400 });
   }
+
+  const userId = userData.user.id;
 
   try {
     const profile = await getProfileModerationState(supabase, userId);

@@ -1,26 +1,38 @@
 import { NextResponse } from 'next/server';
 import { shouldAutoHide } from '@/lib/domain';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { getProfileModerationState, isPostingBlocked } from '@/lib/server/moderation';
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
-  if (!supabase) {
+  const authSupabase = await createSupabaseServerClient();
+  if (!supabase || !authSupabase) {
     return NextResponse.json({ error: 'Supabase is not configured' }, { status: 500 });
   }
 
+  const { data: userData, error: userError } = await authSupabase.auth.getUser();
+  if (userError) {
+    return NextResponse.json({ error: userError.message }, { status: 500 });
+  }
+
+  if (!userData.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const payload = await request.json();
-  const { body, scope, teamId, matchId, authorId } = payload as {
+  const { body, scope, teamId, matchId, autoHidden } = payload as {
     body?: string;
     scope?: 'team_room' | 'match_thread';
     teamId?: string;
     matchId?: string;
-    authorId?: string;
+    autoHidden?: boolean;
   };
 
-  if (!body || !scope || !authorId) {
+  if (!body || !scope) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+
+  const authorId = userData.user.id;
 
   try {
     const profile = await getProfileModerationState(supabase, authorId);
@@ -35,7 +47,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 
-  const hiddenByKeyword = shouldAutoHide(body);
+  const serverHidden = shouldAutoHide(body);
+  const hiddenByKeyword = serverHidden || Boolean(autoHidden);
 
   const { data, error } = await supabase
     .from('posts')
