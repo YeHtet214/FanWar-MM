@@ -133,7 +133,7 @@ export default function MemePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateId: selectedTemplate.id,
+          templateSlug: selectedTemplate.slug,
           imageDataUrl: previewDataUrl,
           matchId: selectedMatchId || undefined,
           targetTeamId: selectedTeamId || undefined,

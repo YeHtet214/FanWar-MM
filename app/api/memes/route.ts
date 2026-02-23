@@ -33,8 +33,9 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json();
-  const { templateId, imageDataUrl, matchId, targetTeamId, caption, textSlots } = payload as {
+  const { templateId, templateSlug, imageDataUrl, matchId, targetTeamId, caption, textSlots } = payload as {
     templateId?: string;
+    templateSlug?: string;
     imageDataUrl?: string;
     matchId?: string;
     targetTeamId?: string;
@@ -42,8 +43,33 @@ export async function POST(request: Request) {
     textSlots?: string[];
   };
 
-  if (!templateId || !imageDataUrl) {
+  if ((!templateId && !templateSlug) || !imageDataUrl) {
     return NextResponse.json({ error: 'Missing required meme data' }, { status: 400 });
+  }
+
+  let resolvedTemplateId = templateId;
+  if (!resolvedTemplateId && templateSlug) {
+    const normalizedSlug = templateSlug.trim();
+    if (!normalizedSlug) {
+      return NextResponse.json({ error: 'Missing required meme data' }, { status: 400 });
+    }
+
+    const { data: template, error: templateError } = await supabase
+      .from('meme_templates')
+      .select('id')
+      .eq('slug', normalizedSlug)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (templateError) {
+      return NextResponse.json({ error: templateError.message }, { status: 500 });
+    }
+
+    if (!template) {
+      return NextResponse.json({ error: 'Invalid meme template' }, { status: 400 });
+    }
+
+    resolvedTemplateId = template.id;
   }
 
   const creatorId = userData.user.id;
@@ -73,7 +99,7 @@ export async function POST(request: Request) {
   }
 
   const fileExt = decoded.mimeType.includes('png') ? 'png' : 'jpg';
-  const objectPath = `${creatorId}/${Date.now()}-${templateId}.${fileExt}`;
+  const objectPath = `${creatorId}/${Date.now()}-${resolvedTemplateId}.${fileExt}`;
 
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(objectPath, decoded.buffer, {
     contentType: decoded.mimeType,
@@ -93,7 +119,7 @@ export async function POST(request: Request) {
       creator_id: creatorId,
       match_id: matchId ?? null,
       target_team_id: targetTeamId ?? null,
-      template_id: templateId,
+      template_id: resolvedTemplateId,
       rendered_image_url: renderedImageUrl,
       caption: normalizedCaption || null,
       overlay_text: textSlots ?? [],
