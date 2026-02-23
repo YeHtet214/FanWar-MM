@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
@@ -25,8 +25,14 @@ export default function AuthCallbackPage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showRetryHint, setShowRetryHint] = useState(false);
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
+    if (hasProcessedRef.current) {
+      return;
+    }
+    hasProcessedRef.current = true;
+
     const timeoutId = window.setTimeout(() => {
       setShowRetryHint(true);
     }, 7000);
@@ -62,7 +68,7 @@ export default function AuthCallbackPage() {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             if (/PKCE code verifier not found/i.test(error.message)) {
-              setErrorMessage('Your sign-in link expired or was opened in a different browser. Please request a new magic link and open it in the same browser you used to submit your email.');
+              setErrorMessage('Your sign-in link is invalid or has already been used. Please request a new magic link and try again.');
               return;
             }
 
