@@ -7,6 +7,7 @@ import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useLanguage } from '@/lib/language';
 import { getTeams } from '@/lib/repositories/teams';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { User } from '@supabase/supabase-js';
 import { Team } from '@/lib/types';
 
 type ProfileRow = {
@@ -14,6 +15,14 @@ type ProfileRow = {
 };
 
 const allowedNextPrefixes = ['/war-room', '/match/', '/meme', '/leaderboard', '/moderation'];
+
+
+function buildUsernameCandidate(user: User) {
+  const email = user.email?.split('@')[0] ?? 'fan';
+  const sanitized = email.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 18) || 'fan';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${sanitized}_${suffix}`;
+}
 
 function getSafeNextPath() {
   const nextPath = new URLSearchParams(window.location.search).get('next');
@@ -104,14 +113,34 @@ export default function OnboardingPage() {
         return;
       }
 
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from('profiles')
         .update({ primary_team_id: teamId })
-        .eq('id', userData.user.id);
+        .eq('id', userData.user.id)
+        .select('id')
+        .limit(1);
 
       if (updateError) {
         setErrorMessage(updateError.message);
         return;
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        const username = buildUsernameCandidate(userData.user);
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: userData.user.id,
+            username,
+            primary_team_id: teamId
+          }, { onConflict: 'id' })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          setErrorMessage(`Could not complete onboarding automatically. ${insertError.message}`);
+          return;
+        }
       }
 
       setCurrentTeamId(teamId);
@@ -137,6 +166,29 @@ export default function OnboardingPage() {
 
       {errorMessage ? (
         <div className="card border border-red-600 bg-red-950/30 text-red-200">{errorMessage}</div>
+      ) : null}
+
+
+      {currentTeamId ? (
+        <div className="card border border-sky-700 bg-sky-950/30 text-sky-100">
+          <p className="mb-3">Your team has been locked. Continue to start participating.</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-md bg-red-600 px-3 py-1 text-sm"
+              onClick={() => router.push('/war-room')}
+              type="button"
+            >
+              Go to War Room
+            </button>
+            <button
+              className="rounded-md border border-slate-500 px-3 py-1 text-sm"
+              onClick={() => router.push('/leaderboard')}
+              type="button"
+            >
+              View Leaderboard
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {teamsLoading && <p className="card text-slate-300">Loading teams...</p>}

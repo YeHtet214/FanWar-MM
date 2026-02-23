@@ -154,6 +154,10 @@ export default function AuthPage() {
         Use your email to receive a magic link. New users will be created automatically by Supabase Auth.
       </p>
 
+      <p className="rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300">
+        Important: open the magic link in the same browser and device where you requested it.
+      </p>
+
       <form className="card space-y-3" onSubmit={handleSendMagicLink}>
         <label className="block space-y-1" htmlFor="email">
           <span className="text-sm text-slate-300">Email address</span>

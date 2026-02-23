@@ -37,19 +37,24 @@ export default function AuthCallbackPage() {
       const tokenHash = searchParams.get('token_hash');
       const otpType = searchParams.get('type');
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setErrorMessage(error.message);
-          return;
-        }
-      } else if (tokenHash && otpType) {
+      if (tokenHash && otpType) {
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: otpType === 'recovery' ? 'recovery' : 'email'
         });
 
         if (error) {
+          setErrorMessage(error.message);
+          return;
+        }
+      } else if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          if (/PKCE code verifier not found/i.test(error.message)) {
+            setErrorMessage('Your sign-in link expired or was opened in a different browser. Please request a new magic link and open it in the same browser you used to submit your email.');
+            return;
+          }
+
           setErrorMessage(error.message);
           return;
         }
@@ -66,7 +71,7 @@ export default function AuthCallbackPage() {
         .from('profiles')
         .select('primary_team_id')
         .eq('id', userData.user.id)
-        .single();
+        .maybeSingle();
 
       if (!profile || !(profile as ProfileRow).primary_team_id) {
         router.replace('/onboarding');
