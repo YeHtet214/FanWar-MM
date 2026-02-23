@@ -27,6 +27,7 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
+      try {
       if (!supabase) {
         setErrorMessage('Supabase is not configured.');
         return;
@@ -88,6 +89,10 @@ export default function AuthCallbackPage() {
       }
 
       router.replace(requestedPath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected authentication error.';
+      setErrorMessage(message);
+    }
     };
 
     handleAuthCallback();
