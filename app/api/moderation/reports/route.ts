@@ -55,13 +55,20 @@ export async function POST(request: Request) {
 
   const resolvedStatus = decision === 'confirmed' ? 'resolved' : 'dismissed';
 
-  const { error: reportUpdateError } = await supabase
+  const { data: updatedReport, error: reportUpdateError } = await supabase
     .from('reports')
     .update({ status: resolvedStatus, reviewed_at: new Date().toISOString(), reviewed_by: reviewerId })
-    .eq('id', reportId);
+    .eq('id', reportId)
+    .in('status', ['open', 'reviewing'])
+    .select('id')
+    .maybeSingle();
 
   if (reportUpdateError) {
     return NextResponse.json({ error: reportUpdateError.message }, { status: 500 });
+  }
+
+  if (!updatedReport) {
+    return NextResponse.json({ error: 'Report has already been reviewed' }, { status: 409 });
   }
 
   let nextState: string | null = null;

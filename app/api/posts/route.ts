@@ -10,13 +10,12 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json();
-  const { body, scope, teamId, matchId, authorId, autoHidden } = payload as {
+  const { body, scope, teamId, matchId, authorId } = payload as {
     body?: string;
     scope?: 'team_room' | 'match_thread';
     teamId?: string;
     matchId?: string;
     authorId?: string;
-    autoHidden?: boolean;
   };
 
   if (!body || !scope || !authorId) {
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 
-  const hiddenByKeyword = autoHidden ?? shouldAutoHide(body);
+  const hiddenByKeyword = shouldAutoHide(body);
 
   const { data, error } = await supabase
     .from('posts')
